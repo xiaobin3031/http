@@ -1,7 +1,6 @@
 package com.xiaobin.http;
 
-import com.xiaobin.conn.ConnectionFactory;
-import com.xiaobin.sql.Dao;
+import com.xiaobin.sql.Dao2;
 import com.xiaobin.util.CodeKit;
 import com.xiaobin.util.Strkit;
 import org.slf4j.Logger;
@@ -35,7 +34,7 @@ public class HttpCollect {
 
     private static final HttpCollect instance = new HttpCollect();
 
-    private static final Dao dao = new Dao();
+    private static final Dao2 DAO_2 = new Dao2();
 
     private static boolean timeoutFlag = false;//超时标志
     private static final int sleepBaseTime = 60;//超时时休息的最短时间，秒
@@ -61,9 +60,9 @@ public class HttpCollect {
                 -1, "https://www.hao123.com/", -1, 0, 0, System.currentTimeMillis());
         //XWB-2020/8/11- 查询待处理的网址
         String sql = "select * from http_host_detail where state = 0 limit 0, 5000";
-        List<Map<String, Object>> urlMapList = dao.findList(sql);
+        List<Map<String, Object>> urlMapList = DAO_2.findList(sql);
         while(!urlMapList.isEmpty()){
-            urlMapList.parallelStream().filter(m -> dao.exec("update http_host_detail set state = 1 where state = 0 and id = ?", m.get("id")) != 0)
+            urlMapList.parallelStream().filter(m -> DAO_2.exec("update http_host_detail set state = 1 where state = 0 and id = ?", m.get("id")) != 0)
                     .forEach(map -> {
                         if(timeoutFlag){
                             try {
@@ -89,7 +88,7 @@ public class HttpCollect {
                             urlConnection.setDoOutput(false);
                             urlConnection.connect();
                             int responseCode = urlConnection.getResponseCode();
-                            dao.exec("update http_host_detail set url_state = ? where id = ?", responseCode, uuid);
+                            DAO_2.exec("update http_host_detail set url_state = ? where id = ?", responseCode, uuid);
                             if(responseCode >= 200 && responseCode < 300){
                                 String msg = getContent(urlConnection.getInputStream());
                                 urlConnection.disconnect();
@@ -119,10 +118,10 @@ public class HttpCollect {
                             if(urlConnection != null){
                                 urlConnection.disconnect();
                             }
-                            dao.exec("update http_host_detail set state = ? where id = ?", state, uuid);
+                            DAO_2.exec("update http_host_detail set state = ? where id = ?", state, uuid);
                         }
                     });
-            urlMapList = dao.findList(sql);
+            urlMapList = DAO_2.findList(sql);
         }
     }
 
@@ -169,9 +168,9 @@ public class HttpCollect {
         }
         if(!Strkit.isEmpty(name)){
             if(name.matches("^.*[\\u4e00-\\u9fa5].*$")){
-                dao.exec("update http_host_detail set name_c = ? where id = ?", name, uuid);
+                DAO_2.exec("update http_host_detail set name_c = ? where id = ?", name, uuid);
             }else{
-                dao.exec("update http_host_detail set name_e = ? where id = ?", name, uuid);
+                DAO_2.exec("update http_host_detail set name_e = ? where id = ?", name, uuid);
             }
         }
     }
@@ -189,7 +188,7 @@ public class HttpCollect {
         }
         if(!telSet.isEmpty()){
             String digit = telSet.stream().map(tel -> tel.replaceAll("[\\s-]+", "")).collect(Collectors.joining(","));
-            dao.exec("insert into url_digit(id, digit) values(?, ?)", uuid, digit);
+            DAO_2.exec("insert into url_digit(id, digit) values(?, ?)", uuid, digit);
         }
     }
 
@@ -230,8 +229,8 @@ public class HttpCollect {
         return port;
     }
     private void insertHostDetail(String url, Object... objects){
-        if(!dao.exist("select 1 from http_host_detail where url = ?", url)){
-            dao.exec("insert into http_host_detail(id, parent_id, url, url_state, level, state, create_time) values(?,?,?,?,?,?,?)", objects);
+        if(!DAO_2.exist("select 1 from http_host_detail where url = ?", url)){
+            DAO_2.exec("insert into http_host_detail(id, parent_id, url, url_state, level, state, create_time) values(?,?,?,?,?,?,?)", objects);
         }
     }
     private String getContent(InputStream inputStream){
