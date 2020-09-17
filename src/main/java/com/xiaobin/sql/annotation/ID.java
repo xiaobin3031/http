@@ -10,5 +10,5 @@ import java.lang.annotation.*;
 @Target(ElementType.FIELD)
 public @interface ID {
 
-    String name();
+    String name() default "";
 }
