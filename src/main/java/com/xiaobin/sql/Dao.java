@@ -6,20 +6,14 @@ package com.xiaobin.sql;
 public interface Dao {
 
     default int insert(){
-        SqlFactory.SqlObj sqlObj = SqlFactory.insert(this);
-        Dao2 dao2 = new Dao2();
-        return dao2.exec(sqlObj.getSql(), sqlObj.getObjects());
+        return SqlFactory.insert(this);
     }
 
     default int update(){
-        SqlFactory.SqlObj sqlObj = SqlFactory.update(this);
-        Dao2 dao2 = new Dao2();
-        return dao2.exec(sqlObj.getSql(), sqlObj.getObjects());
+        return SqlFactory.update(this);
     }
 
     default int delete(){
-        SqlFactory.SqlObj sqlObj = SqlFactory.delete(this);
-        Dao2 dao2 = new Dao2();
-        return dao2.exec(sqlObj.getSql(), sqlObj.getObjects());
+        return SqlFactory.delete(this);
     }
 }

@@ -92,9 +92,8 @@ public class SqlFactory {
      * @param <T> 泛型
      * @return SqlObj对象，包括sql和参数
      */
-    public static <T> SqlObj insert(T t){
+    public static <T> int insert(T t){
         DbTable dbTable = getDbTable(t);
-        SqlObj sqlObj = new SqlObj();
         Map<String, ColumnMethod> methodMap = dbTable.columnMethodMap;
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("insert into ")
@@ -114,15 +113,15 @@ public class SqlFactory {
                 }
             }
         }
-        if(!valueList.isEmpty()){
+        if(valueList.isEmpty()){
+            throw new RuntimeException("insert 值为空");
+        }else{
             stringBuilder.replace(stringBuilder.length() - 1, stringBuilder.length(), ")")
                     .append(" values(")
                     .append(IntStream.range(0, valueList.size()).mapToObj(i -> "?").collect(Collectors.joining(",")))
                     .append(")");
-            sqlObj.setSql(stringBuilder.toString());
-            sqlObj.setObjects(valueList.toArray());
+            return exec(stringBuilder.toString(), valueList.toArray());
         }
-        return sqlObj;
     }
 
     /**
@@ -131,7 +130,7 @@ public class SqlFactory {
      * @param <T> 泛型
      * @return SqlObj
      */
-    public static <T> SqlObj update(T t){
+    public static <T> int update(T t){
         DbTable dbTable = getDbTable(t);
         Map<String, ColumnMethod> methodMap = dbTable.columnMethodMap;
         List<Object> valueList = new ArrayList<>();
@@ -153,10 +152,7 @@ public class SqlFactory {
             stringBuilder.append(" where 1 = 1");
         }
         withIdWhere(stringBuilder, valueList, dbTable, t);
-        SqlObj sqlObj = new SqlObj();
-        sqlObj.setSql(stringBuilder.toString());
-        sqlObj.setObjects(valueList.toArray());
-        return sqlObj;
+        return exec(stringBuilder.toString(), valueList.toArray());
     }
 
     /**
@@ -165,17 +161,14 @@ public class SqlFactory {
      * @param <T> 泛型
      * @return SqlObj
      */
-    public static <T> SqlObj delete(T t){
+    public static <T> int delete(T t){
         DbTable dbTable = getDbTable(t);
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("delete from ")
                 .append(dbTable.tableName)
                 .append(" where ");
         withIdWhere(stringBuilder, valueList, dbTable, t);
-        SqlObj sqlObj = new SqlObj();
-        sqlObj.setSql(stringBuilder.toString());
-        sqlObj.setObjects(valueList.toArray());
-        return sqlObj;
+        return exec(stringBuilder.toString(), valueList.toArray());
     }
 
     private static <T> Object getValue(Method method, T t){
@@ -189,6 +182,10 @@ public class SqlFactory {
         }
     }
 
+    private static int exec(String sql, Object[] objects){
+        Dao2 dao2 = new Dao2();
+        return dao2.exec(sql, objects);
+    }
     /**
      * 添加where的id条件
      * @param <T> 泛型
