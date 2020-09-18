@@ -1,5 +1,6 @@
 package com.xiaobin.sql;
 
+import com.mysql.cj.protocol.Resultset;
 import com.xiaobin.sql.annotation.ID;
 import com.xiaobin.sql.annotation.Table;
 import com.xiaobin.util.Strkit;
@@ -213,7 +214,54 @@ public class SqlFactory {
     public static <T> List<T> find(T t){
         DbTable dbTable = getDbTable(t);
         List<Object> valueList = new ArrayList<>();
-        StringBuilder stringBuilder = new StringBuilder("select * from ").append(dbTable.tableName).append(" where 1 = 1");
+        StringBuilder stringBuilder = new StringBuilder();
+        queryInfo(t, dbTable, stringBuilder, valueList);
+        ResultSet resultSet = execQuery(stringBuilder.toString(), valueList.toArray());
+        return getList(t, dbTable, resultSet);
+    }
+
+    /**
+     * 分页查询
+     * @param t 原数据
+     * @param start 起始
+     * @param end 结束
+     * @param <T> 泛型
+     * @return Page
+     */
+    public static <T> Page<T> page(T t, int start, int end){
+        DbTable dbTable = getDbTable(t);
+        List<Object> valueList = new ArrayList<>();
+        StringBuilder stringBuilder = new StringBuilder();
+        queryInfo(t, dbTable, stringBuilder, valueList);
+        Page<T> page = new Page<>();
+        page.setStart(start);
+        page.setEnd(end);
+        //XWB-2020/9/18- 查询总条数
+        String sql = stringBuilder.toString();
+        String totalSql = "select count(*) as count from (" + sql + " )";
+        Object[] objects = valueList.toArray();
+        ResultSet resultSet = execQuery(totalSql, objects);
+        long total = 0;
+        try {
+            if(resultSet.next()){
+                total = resultSet.getLong("count");
+            }
+        } catch (SQLException sqlException) {
+            if(logger.isErrorEnabled()){
+                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+            }
+        }
+        page.setTotal(total);
+        if(total > 0){
+            //XWB-2020/9/18- 查询明细记录
+            resultSet = execQuery(sql, objects);
+            page.setList(getList(t, dbTable, resultSet));
+        }
+        return page;
+    }
+
+    private static <T> void queryInfo(T t, DbTable dbTable, StringBuilder stringBuilder, List<Object> valueList){
+        stringBuilder.append("select * from ").append(dbTable.tableName).append(" where 1 = 1");
         for(Map.Entry<String, ColumnMethod> entry: dbTable.columnMethodMap.entrySet()){
             ColumnMethod columnMethod = entry.getValue();
             Object object = getValue(columnMethod.getMethod, t);
@@ -222,7 +270,8 @@ public class SqlFactory {
                 valueList.add(object);
             }
         }
-        ResultSet resultSet = execQuery(stringBuilder.toString(), valueList.toArray());
+    }
+    private static <T> List<T> getList(T t, DbTable dbTable, ResultSet resultSet){
         List<T> list = new ArrayList<>();
         try {
             while(resultSet.next()){

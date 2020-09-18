@@ -28,4 +28,9 @@ public interface Dao {
     default <T> List<T> find(){
         return (List<T>) SqlFactory.find(this);
     }
+
+    @SuppressWarnings("unchecked")
+    default <T> Page<T> page(int start, int end){
+        return (Page<T>) SqlFactory.page(this, start, end);
+    }
 }
