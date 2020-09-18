@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -17,7 +19,6 @@ public class ConnectionFactory {
     private static final ConcurrentMap<Long, Connection> connectionConcurrentMap = new ConcurrentHashMap<>();
 
     private static final ConnectionFactory instance = new ConnectionFactory();
-    private static boolean init = false;//是否初始化过
 
     private static volatile boolean replenish = false;//是否正在添加连接
     private static final int maxKeep = 80; //最大保持的连接数
@@ -41,12 +42,6 @@ public class ConnectionFactory {
      * @return connection
      */
     public static Connection getConn(){
-        while(connectionConcurrentLinkedQueue.isEmpty()){
-            if(!replenish){
-                //XWB-2020/8/24- 如果不在增加连接，就主动增加连接
-                instance.initConn(maxKeep - minKeep);
-            }
-        }
         Connection connection = connectionConcurrentLinkedQueue.poll();
         while(connection == null){
             if(logger.isDebugEnabled()){
@@ -71,15 +66,6 @@ public class ConnectionFactory {
      * 初始化
      */
     private static void init(){
-        if(init){
-            return;
-        }
-        synchronized (instance){
-            if(init){
-                return;
-            }
-            init = true;
-        }
         try {
             Class.forName(driverClass);
         } catch (ClassNotFoundException e) {
@@ -88,7 +74,22 @@ public class ConnectionFactory {
             }
             throw new RuntimeException(e);
         }
-        instance.initConn(minKeep);
+        instance.initConn(minKeep, false);
+
+        //XWB-2020/9/18- 自动添加连接数
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                int count = connectionConcurrentLinkedQueue.size();
+                if(logger.isDebugEnabled()){
+                    logger.debug("开始检查连接数，现在连接数： {}", count);
+                }
+                if(count < minKeep){
+                    instance.initConn(maxKeep - count, true);
+                }
+            }
+        }, 1, 60_000);
     }
 
     /**
@@ -110,8 +111,9 @@ public class ConnectionFactory {
     /**
      * 初始化连接
      * @param count 初始化连接个数
+     * @param useThread 是否使用线程
      */
-    private void initConn(int count){
+    private void initConn(int count, boolean useThread){
         if(replenish){
             return;
         }
@@ -126,8 +128,14 @@ public class ConnectionFactory {
                 logger.debug("开始增加连接数： {}", count);
             }
             try{
-                for(int i=0;i<count;i++){
-                    executorService.execute(this::replenishConn);
+                if(useThread){
+                    for(int i=0;i<count;i++){
+                        executorService.execute(this::replenishConn);
+                    }
+                }else{
+                    for(int i=0;i<count;i++){
+                        replenishConn();
+                    }
                 }
             }catch(Exception e){
                 if(logger.isErrorEnabled()){
