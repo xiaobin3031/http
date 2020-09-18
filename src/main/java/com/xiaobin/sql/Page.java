@@ -18,7 +18,7 @@ public class Page<T> {
     }
 
     public void setStart(int start) {
-        this.start = start;
+        this.start = Math.max(start, 0);
     }
 
     public int getEnd() {
