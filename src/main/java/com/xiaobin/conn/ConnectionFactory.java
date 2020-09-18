@@ -115,6 +115,9 @@ public class ConnectionFactory {
      */
     private void initConn(int count, boolean useThread){
         if(replenish){
+            if(logger.isWarnEnabled()){
+                logger.warn("连接正在增加中，剩余：{}", Math.abs(atomicInteger.get()));
+            }
             return;
         }
         replenish = true;
