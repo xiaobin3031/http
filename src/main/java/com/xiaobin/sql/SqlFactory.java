@@ -13,6 +13,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.JarURLConnection;
 import java.net.URL;
+import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -148,9 +151,7 @@ public class SqlFactory {
                 valueList.add(object);
             }
         }
-        if(valueList.isEmpty()){
-            stringBuilder.append(" where 1 = 1");
-        }
+        stringBuilder.append(" where 1 = 1");
         withIdWhere(stringBuilder, valueList, dbTable, t);
         return exec(stringBuilder.toString(), valueList.toArray());
     }
@@ -166,9 +167,150 @@ public class SqlFactory {
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("delete from ")
                 .append(dbTable.tableName)
-                .append(" where ");
+                .append(" where 1 = 1");
         withIdWhere(stringBuilder, valueList, dbTable, t);
         return exec(stringBuilder.toString(), valueList.toArray());
+    }
+
+    /**
+     * 通过id查询结果
+     * @param t 原对象
+     * @param object id值，如果为null，则从t中查询id值
+     * @param <T> 泛型
+     * @return 结果对象
+     */
+    public static <T> T findById(T t, Object object){
+        DbTable dbTable = getDbTable(t);
+        List<Object> valueList = new ArrayList<>();
+        StringBuilder stringBuilder = new StringBuilder("select * from ").append(dbTable.tableName).append(" where ");
+        if(dbTable.idList.size() == 1){
+            stringBuilder.append(dbTable.idList.get(0)).append(" = ?");
+            valueList.add(object);
+        }else{
+            //XWB-2020/9/18- 多个id值，从t中获取信息
+            stringBuilder.append("1 = 1");
+            withIdWhere(stringBuilder, valueList, dbTable, t);
+        }
+        ResultSet resultSet = execQuery(stringBuilder.toString(), valueList.toArray());
+        try {
+            if(resultSet.next()){
+                return getBeanFromResultSet(t, dbTable, resultSet);
+            }
+        } catch (SQLException sqlException) {
+            if(logger.isErrorEnabled()){
+                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 查询列表
+     * @param t 原数据
+     * @param <T> 泛型
+     * @return 查询list
+     */
+    public static <T> List<T> find(T t){
+        DbTable dbTable = getDbTable(t);
+        List<Object> valueList = new ArrayList<>();
+        StringBuilder stringBuilder = new StringBuilder("select * from ").append(dbTable.tableName).append(" where 1 = 1");
+        for(Map.Entry<String, ColumnMethod> entry: dbTable.columnMethodMap.entrySet()){
+            ColumnMethod columnMethod = entry.getValue();
+            Object object = getValue(columnMethod.getMethod, t);
+            if(object != null){
+                stringBuilder.append(" and ").append(columnMethod.name).append(" = ?");
+                valueList.add(object);
+            }
+        }
+        ResultSet resultSet = execQuery(stringBuilder.toString(), valueList.toArray());
+        List<T> list = new ArrayList<>();
+        try {
+            while(resultSet.next()){
+                T tt = getBeanFromResultSet(t, dbTable, resultSet);
+                list.add(tt);
+            }
+        } catch (SQLException sqlException) {
+            if(logger.isErrorEnabled()){
+                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+            }
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T getBeanFromResultSet(T t, DbTable dbTable, ResultSet resultSet){
+        T newT = null;
+        try {
+            newT = (T) Class.forName(t.getClass().getName()).newInstance();
+            for(Map.Entry<String, ColumnMethod> entry: dbTable.columnMethodMap.entrySet()){
+                Object value = getValueFromResultSet(entry.getValue().type, entry.getValue().name, resultSet);
+                setValue(entry.getValue().setMethod, t, value);
+            }
+        } catch (ClassNotFoundException | IllegalAccessException | InstantiationException sqlException) {
+            if(logger.isErrorEnabled()){
+                logger.error(sqlException.getMessage(), sqlException);
+            }
+        }
+        return newT;
+    }
+
+    private static Object getValueFromResultSet(Class<?> type, String columnName, ResultSet resultSet){
+        try {
+            if(type.isPrimitive()){
+                switch(type.getName()){
+                    case "int":
+                        return resultSet.getInt(columnName);
+                    case "byte":
+                        return resultSet.getByte(columnName);
+                    case "char":
+                        return (char)resultSet.getInt(columnName);
+                    case "float":
+                        return resultSet.getFloat(columnName);
+                    case "double":
+                        return resultSet.getDouble(columnName);
+                    case "boolean":
+                        return resultSet.getBoolean(columnName);
+                    case "short":
+                        return resultSet.getShort(columnName);
+                    case "long":
+                        return resultSet.getLong(columnName);
+                }
+            }else{
+                switch(type.getName()){
+                    case "java.sql.Date":
+                        return resultSet.getDate(columnName);
+                    case "java.util.Date":
+                        Date date = resultSet.getDate(columnName);
+                        if(date != null){
+                            return new java.util.Date(date.getTime());
+                        }
+                        return null;
+                    case "java.time.LocalDate":
+                        Date localDate = resultSet.getDate(columnName);
+                        if(localDate != null){
+                            return localDate.toLocalDate();
+                        }
+                        return null;
+                    case "java.sql.Timestamp":
+                        return resultSet.getTimestamp(columnName);
+                    case "java.sql.Time":
+                        return resultSet.getTime(columnName);
+                    case "java.sql.Blob":
+                        return resultSet.getBlob(columnName);
+                    case "java.sql.Clob":
+                        return resultSet.getClob(columnName);
+                    case "java.sql.NClob":
+                        return resultSet.getNClob(columnName);
+                    default:
+                        return resultSet.getString(columnName);
+                }
+            }
+        } catch (SQLException sqlException) {
+            if(logger.isErrorEnabled()){
+                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+            }
+        }
+        return null;
     }
 
     private static <T> Object getValue(Method method, T t){
@@ -180,6 +322,21 @@ public class SqlFactory {
             }
             return null;
         }
+    }
+
+    private static <T> void setValue(Method method, T t, Object value){
+        try {
+            method.invoke(t, value);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            if(logger.isErrorEnabled()){
+                logger.error(e.getMessage(), e);
+            }
+        }
+    }
+
+    private static ResultSet execQuery(String sql, Object[] objects){
+        Dao2 dao2 = new Dao2();
+        return dao2.find(sql, objects);
     }
 
     private static int exec(String sql, Object[] objects){
@@ -341,34 +498,6 @@ public class SqlFactory {
             this.type = type;
             this.getMethod = getMethod;
             this.setMethod = setMethod;
-        }
-    }
-
-    /**
-     * 封装的sql信息
-     */
-    public static class SqlObj{
-        private SqlObj(){}
-
-        /* sql */
-        private String sql;
-        /* sql对应的参数 */
-        private Object[] objects;
-
-        public String getSql() {
-            return sql;
-        }
-
-        private void setSql(String sql) {
-            this.sql = sql;
-        }
-
-        public Object[] getObjects() {
-            return objects;
-        }
-
-        private void setObjects(Object[] objects) {
-            this.objects = objects;
         }
     }
 }

@@ -273,6 +273,59 @@ public class Dao2 {
         return exist;
     }
 
+    public ResultSet find(String sql, Object... objects){
+        Connection connection = ConnectionFactory.getConn(Thread.currentThread().getId());
+        if(connection == null){
+            return find(sql, ConnectionFactory.getConn(), true, objects);
+        }else{
+            return find(sql, connection, false, objects);
+        }
+    }
+
+    private ResultSet find(String sql, Connection connection, boolean needAdd, Object... objects) {
+        PreparedStatement preparedStatement = null;
+        ResultSet resultSet = null;
+        long id = atomicLong.incrementAndGet();
+        printSql(id, sql);
+        printArguments(id, objects);
+        try{
+            connection = ConnectionFactory.getConn();
+            preparedStatement = connection.prepareStatement(sql);
+            setArguments(preparedStatement, objects);
+            resultSet = preparedStatement.executeQuery();
+        }catch(Exception e){
+            if(logger.isErrorEnabled()){
+                logger.error("ID: {}, 执行sql失败: ", id, e);
+            }
+        }finally{
+            if(needAdd){
+                ConnectionFactory.add(connection);
+            }
+            ConnectionFactory.close(preparedStatement, resultSet);
+        }
+        long index = 0;
+        if(resultSet != null){
+            try{
+                while(resultSet.next()){
+                    index++;
+                }
+            }catch(SQLException e){
+                if(logger.isErrorEnabled()){
+                    logger.error(e.getMessage(), e);
+                }
+            } finally{
+                try {
+                    resultSet.beforeFirst();
+                } catch (SQLException sqlException) {
+                    if(logger.isErrorEnabled()){
+                        logger.error(sqlException.getMessage(), sqlException);
+                    }
+                }
+            }
+        }
+        printResult(id, index);
+        return resultSet;
+    }
     /**
      * 查询map， 先返回map，后续再格式化成类
      * @param sql sql
