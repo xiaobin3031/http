@@ -1,15 +1,10 @@
 package com.xiaobin.sql;
 
-import com.mysql.cj.protocol.Resultset;
-import com.xiaobin.sql.annotation.ID;
-import com.xiaobin.sql.annotation.Table;
-import com.xiaobin.util.Strkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.JarURLConnection;
@@ -20,6 +15,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -98,17 +94,17 @@ public class SqlFactory {
      */
     public static <T> int insert(T t){
         DbTable dbTable = getDbTable(t);
-        Map<String, ColumnMethod> methodMap = dbTable.columnMethodMap;
+        Map<String, ColumnMethod> methodMap = dbTable.getColumnMethodMap();
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("insert into ")
-                .append(dbTable.tableName)
+                .append(dbTable.getTableName())
                 .append("(");
         for(Map.Entry<String, ColumnMethod> entry: methodMap.entrySet()){
             ColumnMethod columnMethod = entry.getValue();
             try {
-                Object object = columnMethod.getMethod.invoke(t);
+                Object object = columnMethod.getGetMethod().invoke(t);
                 if(object != null){
-                    stringBuilder.append(columnMethod.name).append(",");
+                    stringBuilder.append(columnMethod.getName()).append(",");
                     valueList.add(object);
                 }
             } catch (IllegalAccessException | InvocationTargetException e) {
@@ -136,23 +132,23 @@ public class SqlFactory {
      */
     public static <T> int update(T t){
         DbTable dbTable = getDbTable(t);
-        Map<String, ColumnMethod> methodMap = dbTable.columnMethodMap;
+        Map<String, ColumnMethod> methodMap = dbTable.getColumnMethodMap();
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("update ")
-                .append(dbTable.tableName)
+                .append(dbTable.getTableName())
                 .append(" set");
         for(Map.Entry<String, ColumnMethod> entry: methodMap.entrySet()){
             ColumnMethod columnMethod = entry.getValue();
-            if(dbTable.idList.contains(columnMethod.name)){
+            if(dbTable.getIdList().contains(columnMethod.getName())){
                 continue;
             }
-            Object object = getValue(columnMethod.getMethod, t);
+            Object object = getValue(columnMethod.getGetMethod(), t);
             if(object != null){
-                stringBuilder.append(" ").append(columnMethod.name).append(" = ?");
+                stringBuilder.append(" ").append(columnMethod.getName()).append(" = ?,");
                 valueList.add(object);
             }
         }
-        stringBuilder.append(" where 1 = 1");
+        stringBuilder.replace(stringBuilder.length() - 1, stringBuilder.length(), "").append(" where 1 = 1");
         withIdWhere(stringBuilder, valueList, dbTable, t);
         return exec(stringBuilder.toString(), valueList.toArray());
     }
@@ -167,7 +163,7 @@ public class SqlFactory {
         DbTable dbTable = getDbTable(t);
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("delete from ")
-                .append(dbTable.tableName)
+                .append(dbTable.getTableName())
                 .append(" where 1 = 1");
         withIdWhere(stringBuilder, valueList, dbTable, t);
         return exec(stringBuilder.toString(), valueList.toArray());
@@ -183,26 +179,27 @@ public class SqlFactory {
     public static <T> T findById(T t, Object object){
         DbTable dbTable = getDbTable(t);
         List<Object> valueList = new ArrayList<>();
-        StringBuilder stringBuilder = new StringBuilder("select * from ").append(dbTable.tableName).append(" where ");
-        if(dbTable.idList.size() == 1){
-            stringBuilder.append(dbTable.idList.get(0)).append(" = ?");
+        StringBuilder stringBuilder = new StringBuilder("select * from ").append(dbTable.getTableName()).append(" where ");
+        if(dbTable.getIdList().size() == 1){
+            stringBuilder.append(dbTable.getIdList().get(0)).append(" = ?");
             valueList.add(object);
         }else{
             //XWB-2020/9/18- 多个id值，从t中获取信息
             stringBuilder.append("1 = 1");
             withIdWhere(stringBuilder, valueList, dbTable, t);
         }
-        ResultSet resultSet = execQuery(stringBuilder.toString(), valueList.toArray());
-        try {
-            if(resultSet.next()){
-                return getBeanFromResultSet(t, dbTable, resultSet);
+        return execQuery(resultSet -> {
+            try {
+                if(resultSet.next()){
+                    return getBeanFromResultSet(dbTable, resultSet);
+                }
+            } catch (SQLException sqlException) {
+                if(logger.isErrorEnabled()){
+                    logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+                }
             }
-        } catch (SQLException sqlException) {
-            if(logger.isErrorEnabled()){
-                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
-            }
-        }
-        return null;
+            return null;
+        }, stringBuilder.toString(), valueList.toArray());
     }
 
     /**
@@ -216,8 +213,7 @@ public class SqlFactory {
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder();
         queryInfo(t, dbTable, stringBuilder, valueList);
-        ResultSet resultSet = execQuery(stringBuilder.toString(), valueList.toArray());
-        return getList(t, dbTable, resultSet);
+        return execQuery(resultSet -> getList(dbTable, resultSet), stringBuilder.toString(), valueList.toArray());
     }
 
     /**
@@ -238,64 +234,66 @@ public class SqlFactory {
         page.setEnd(end);
         //XWB-2020/9/18- 查询总条数
         String sql = stringBuilder.toString();
-        String totalSql = "select count(*) as count from (" + sql + " )";
+        String totalSql = "select count(*) as count from (" + sql + " ) a";
         Object[] objects = valueList.toArray();
-        ResultSet resultSet = execQuery(totalSql, objects);
-        long total = 0;
-        try {
-            if(resultSet.next()){
-                total = resultSet.getLong("count");
+        long total = execQuery(resultSet -> {
+            try {
+                if(resultSet.next()){
+                    return resultSet.getLong("count");
+                }
+            } catch (SQLException sqlException) {
+                if(logger.isErrorEnabled()){
+                    logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+                }
             }
-        } catch (SQLException sqlException) {
-            if(logger.isErrorEnabled()){
-                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
-            }
-        }
+            return 0L;
+        }, totalSql, objects);
         page.setTotal(total);
         if(total > 0){
             //XWB-2020/9/18- 查询明细记录
-            resultSet = execQuery(sql, objects);
-            page.setList(getList(t, dbTable, resultSet));
+            page.setList(execQuery(resultSet -> getList(dbTable, resultSet), sql, objects));
         }
         return page;
     }
 
     private static <T> void queryInfo(T t, DbTable dbTable, StringBuilder stringBuilder, List<Object> valueList){
-        stringBuilder.append("select * from ").append(dbTable.tableName).append(" where 1 = 1");
-        for(Map.Entry<String, ColumnMethod> entry: dbTable.columnMethodMap.entrySet()){
+        stringBuilder.append("select * from ").append(dbTable.getTableName()).append(" where 1 = 1");
+        for(Map.Entry<String, ColumnMethod> entry: dbTable.getColumnMethodMap().entrySet()){
             ColumnMethod columnMethod = entry.getValue();
-            Object object = getValue(columnMethod.getMethod, t);
+            Object object = getValue(columnMethod.getGetMethod(), t);
             if(object != null){
-                stringBuilder.append(" and ").append(columnMethod.name).append(" = ?");
+                stringBuilder.append(" and ").append(columnMethod.getName()).append(" = ?");
                 valueList.add(object);
             }
         }
     }
-    private static <T> List<T> getList(T t, DbTable dbTable, ResultSet resultSet){
+    private static <T> List<T> getList(DbTable dbTable, ResultSet resultSet){
         List<T> list = new ArrayList<>();
-        try {
-            while(resultSet.next()){
-                T tt = getBeanFromResultSet(t, dbTable, resultSet);
-                list.add(tt);
-            }
-        } catch (SQLException sqlException) {
-            if(logger.isErrorEnabled()){
-                logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+        if(resultSet != null){
+            try {
+                while(resultSet.next()){
+                    T tt = getBeanFromResultSet(dbTable, resultSet);
+                    list.add(tt);
+                }
+            } catch (SQLException sqlException) {
+                if(logger.isErrorEnabled()){
+                    logger.error("{}:{}", sqlException.getSQLState(), sqlException.getMessage(), sqlException);
+                }
             }
         }
         return list;
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> T getBeanFromResultSet(T t, DbTable dbTable, ResultSet resultSet){
+    private static <T> T getBeanFromResultSet(DbTable dbTable, ResultSet resultSet){
         T newT = null;
         try {
-            newT = (T) Class.forName(t.getClass().getName()).newInstance();
-            for(Map.Entry<String, ColumnMethod> entry: dbTable.columnMethodMap.entrySet()){
-                Object value = getValueFromResultSet(entry.getValue().type, entry.getValue().name, resultSet);
-                setValue(entry.getValue().setMethod, t, value);
+            newT = (T) dbTable.getClazz().newInstance();
+            for(Map.Entry<String, ColumnMethod> entry: dbTable.getColumnMethodMap().entrySet()){
+                Object value = getValueFromResultSet(entry.getValue().getType(), entry.getValue().getName(), resultSet);
+                setValue(entry.getValue().getSetMethod(), newT, value);
             }
-        } catch (ClassNotFoundException | IllegalAccessException | InstantiationException sqlException) {
+        } catch (IllegalAccessException | InstantiationException sqlException) {
             if(logger.isErrorEnabled()){
                 logger.error(sqlException.getMessage(), sqlException);
             }
@@ -350,6 +348,12 @@ public class SqlFactory {
                         return resultSet.getClob(columnName);
                     case "java.sql.NClob":
                         return resultSet.getNClob(columnName);
+                    case "java.lang.Long":
+                        return resultSet.getLong(columnName);
+                    case "java.lang.Integer":
+                        return resultSet.getInt(columnName);
+                    case "java.math.BigDecimal":
+                        return resultSet.getBigDecimal(columnName);
                     default:
                         return resultSet.getString(columnName);
                 }
@@ -383,9 +387,9 @@ public class SqlFactory {
         }
     }
 
-    private static ResultSet execQuery(String sql, Object[] objects){
+    private static <T> T execQuery(Function<ResultSet, T> function, String sql, Object[] objects){
         Dao2 dao2 = new Dao2();
-        return dao2.find(sql, objects);
+        return dao2.find(function, sql, objects);
     }
 
     private static int exec(String sql, Object[] objects){
@@ -398,16 +402,23 @@ public class SqlFactory {
      * @param stringBuilder stringBuilder
      */
     private static <T> void withIdWhere(StringBuilder stringBuilder, List<Object> valueList, DbTable dbTable, T t){
-        if(dbTable.idList.isEmpty()){
+        if(dbTable.getIdList().isEmpty()){
             throw new RuntimeException("id list 为空");
         }
-        for(String id: dbTable.idList){
-            Object object = getValue(dbTable.columnMethodMap.get(id).getMethod, t);
+        int index = 0;
+        String id = dbTable.getIdList().get(index);
+        Object object = getValue(dbTable.getColumnMethodMap().get(id).getGetMethod(), t);
+        if(object == null){
+            throw new RuntimeException("id["+id+"]值为空: ");
+        }
+        for(; index < dbTable.getIdList().size(); index++){
+            id = dbTable.getIdList().get(index);
+            object = getValue(dbTable.getColumnMethodMap().get(id).getGetMethod(), t);
             if(object == null){
                 //强制所有id都必须有值
                 throw new RuntimeException("id["+id+"]值为空: ");
             }
-            stringBuilder.append(" and ").append(id).append(" = ?");
+            stringBuilder.append(" and ").append(dbTable.getColumnMethodMap().get(id).getName()).append(" = ?");
             valueList.add(object);
         }
     }
@@ -460,93 +471,6 @@ public class SqlFactory {
                     classSet.add(classLoader.loadClass(MODEL_PACKAGE + "." + name));
                 }
             }
-        }
-    }
-
-    /**
-     * 数据库类
-     */
-    private static class DbTable{
-        /* 表名 */
-        private String tableName;
-
-        private final List<String> idList = new ArrayList<>();
-
-        private final Map<String, ColumnMethod> columnMethodMap = new HashMap<>();
-
-        /**
-         * 加载类信息
-         * @param clazz 对象
-         */
-        private void load(Class<?> clazz){
-            Table table = clazz.getDeclaredAnnotation(Table.class);
-            if(table != null){
-                String tableName = table.name();
-                if(Strkit.isEmpty(tableName)){
-                    this.tableName = toLowerCase(clazz.getName());
-                }else{
-                    this.tableName = tableName;
-                }
-                Field[] fields = clazz.getDeclaredFields();
-                for(Field field: fields){
-                    String name = field.getName();
-                    String methodSuffixName = name.substring(0, 1).toUpperCase() + name.substring(1);
-                    Method getMethod = getAMethod(clazz, "get" + methodSuffixName, null);
-                    if(getMethod == null){
-                        getMethod = getAMethod(clazz, "is" + methodSuffixName, null);
-                    }
-                    if(getMethod == null){
-                        continue;
-                    }
-                    Method setMethod = getAMethod(clazz, "set" + methodSuffixName, field.getType());
-                    if(setMethod == null){
-                        continue;
-                    }
-                    ColumnMethod columnMethod = new ColumnMethod(
-                            field.getName(),
-                            field.getType(),
-                            getMethod,
-                            setMethod);
-                    this.columnMethodMap.put(field.getName(), columnMethod);
-
-                    ID id = field.getDeclaredAnnotation(ID.class);
-                    if(id != null){
-                        idList.add(field.getName());
-                    }
-                }
-            }
-        }
-
-        private Method getAMethod(Class<?> clazz, String methodName, Class<?> parameters){
-            try{
-                return clazz.getDeclaredMethod(methodName, parameters);
-            } catch (NoSuchMethodException e) {
-                if(logger.isErrorEnabled()){
-                    logger.error(e.getMessage());
-                }
-                return null;
-            }
-        }
-        private String toLowerCase(String string){
-            return string.substring(0, 1).toLowerCase() + Strkit.replaceAll(string.substring(1), "[A-Z]", o -> "_" + o.toLowerCase());
-        }
-    }
-
-    private static class ColumnMethod{
-        /* 列名 */
-        private final String name;
-        /* 列类型 */
-        private final Class<?> type;
-
-        private final Method getMethod;
-
-        private final Method setMethod;
-
-        public ColumnMethod(String name, Class<?> type, Method getMethod, Method setMethod) {
-            this.name = name;
-            this.type = type;
-            this.getMethod = getMethod;
-            this.setMethod = setMethod;
         }
     }
 }

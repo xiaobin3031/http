@@ -7,7 +7,7 @@ create table sequence(
 );
 
 insert into sequence(name, current_value, increment, max_value, initial_value)
-values('http_host_detail', 1, 1, 4294967295, 1);
+values('network_uri', 1, 1, 4294967295, 1);
 
 -- 这一句需要root或者dba权限
 set global log_bin_trust_function_creators=TRUE;
@@ -39,3 +39,34 @@ begin
 end ;;
 
 delimiter ;
+
+
+-- auto-generated definition
+create table network_uri
+(
+    id            int           not null
+        primary key,
+    protocol      varchar(16)   not null comment '协议',
+    uri           varchar(256)  not null comment '地址',
+    server        varchar(256)  null comment '服务器类型',
+    contentType   varchar(64)   null,
+    contentLength int default 0 not null,
+    status        int default 0 not null comment '状态',
+    message       varchar(512)  null comment '信息',
+    level         int default 0 not null comment '等级',
+    constraint network_uri_uri_uindex
+        unique (uri)
+)
+    comment 'uri';
+
+create unique index network_uri_uri_uindex
+	on network_uri (uri);
+
+	create table constant
+(
+    id    int auto_increment
+        primary key,
+    type  varchar(128)  not null comment '类型',
+    value varchar(1024) not null
+)
+    comment '常量表';

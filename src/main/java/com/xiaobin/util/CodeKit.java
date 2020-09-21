@@ -8,5 +8,6 @@ public class CodeKit {
     public static final int TIMEOUT = 80;
     public static final int UNKNOWN_HOST = 85;
     public static final int ERROR = 90;
+    public static final int GOV_NET = 98;
     public static final int COMPLETE = 99;
 }

@@ -21,8 +21,8 @@ public class ConnectionFactory {
     private static final ConnectionFactory instance = new ConnectionFactory();
 
     private static volatile boolean replenish = false;//是否正在添加连接
-    private static final int maxKeep = 80; //最大保持的连接数
-    private static final int minKeep = 50; //最小保持的连接数
+    private static final int maxKeep = 10; //最大保持的连接数
+    private static final int minKeep = 5; //最小保持的连接数
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
 
     /* 数据库连接参数 */
@@ -74,7 +74,7 @@ public class ConnectionFactory {
             }
             throw new RuntimeException(e);
         }
-        instance.initConn(minKeep, false);
+        instance.initConn((maxKeep - minKeep) / 2 + minKeep, false);
 
         //XWB-2020/9/18- 自动添加连接数
         Timer timer = new Timer();
@@ -89,7 +89,7 @@ public class ConnectionFactory {
                     instance.initConn(maxKeep - count, true);
                 }
             }
-        }, 1, 60_000);
+        }, 60_000, 60_000);
     }
 
     /**
@@ -155,6 +155,9 @@ public class ConnectionFactory {
     public static void add(Connection connection){
         if(connection != null){
             connectionConcurrentLinkedQueue.add(connection);
+        }
+        if(logger.isDebugEnabled()){
+            logger.debug("当前连接数: " + connectionConcurrentLinkedQueue.size());
         }
     }
 
