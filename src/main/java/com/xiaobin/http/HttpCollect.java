@@ -2,6 +2,7 @@ package com.xiaobin.http;
 
 import com.xiaobin.sql.Page;
 import com.xiaobin.sql.model.NetworkUri;
+import com.xiaobin.util.CharsetKit;
 import com.xiaobin.util.CodeKit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,7 +104,7 @@ public class HttpCollect {
             }
             byte[] tmp = new byte[endIndex - firstIndex];
             System.arraycopy(bytes, firstIndex, tmp, 0, tmp.length);
-            return new String(tmp, StandardCharsets.UTF_8);
+            return CharsetKit.getCharset(new String(tmp, StandardCharsets.UTF_8));
         }
     }
 
