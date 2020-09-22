@@ -1,6 +1,7 @@
 package com.xiaobin.sql;
 
 import com.xiaobin.conn.ConnectionFactory;
+import com.xiaobin.conn.ConnectionObj;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,12 +91,12 @@ public class Dao2 {
      * @return 影响的条数
      */
     public int exec(String sql, Object... objects){
-        Connection connection = ConnectionFactory.getConn(Thread.currentThread().getId());
+        ConnectionObj connectionObj = ConnectionFactory.getConn(Thread.currentThread().getId());
         int result;
-        if(connection == null){
+        if(connectionObj == null){
             result = exec(sql, ConnectionFactory.getConn(), objects);
         }else{
-            result = execTransaction(sql, connection, objects);
+            result = execTransaction(sql, connectionObj, objects);
         }
         return result;
     }
@@ -103,31 +104,31 @@ public class Dao2 {
     /**
      * 执行无事务的sql
      * @param sql sql
-     * @param connection 连接
+     * @param connectionObj 连接
      * @param objects 参数
      * @return 影响的结果
      */
-    private int exec(String sql, Connection connection, Object... objects){
+    private int exec(String sql, ConnectionObj connectionObj, Object... objects){
         int result = 0;
         PreparedStatement preparedStatement = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         printArguments(id, objects);
         try{
-            boolean commit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            preparedStatement = connection.prepareStatement(sql);
+            boolean commit = connectionObj.getConnection().getAutoCommit();
+            connectionObj.getConnection().setAutoCommit(false);
+            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
             setArguments(preparedStatement, objects);
             result = preparedStatement.executeUpdate();
-            connection.commit();
-            connection.setAutoCommit(commit);
+            connectionObj.getConnection().commit();
+            connectionObj.getConnection().setAutoCommit(commit);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
                 logger.error("ID: {}, 执行sql失败: ", id, e);
             }
-            rollback(connection);
+            rollback(connectionObj.getConnection());
         }finally{
-            ConnectionFactory.add(connection);
+            ConnectionFactory.add(connectionObj);
             ConnectionFactory.close(preparedStatement);
         }
         printResult(id, result);
@@ -137,19 +138,19 @@ public class Dao2 {
     /**
      * 执行事务的sql
      * @param sql sql
-     * @param connection 连接
+     * @param connectionObj 连接
      * @param objects 参数
      * @return 影响的参数
      */
-    private int execTransaction(String sql, Connection connection, Object... objects){
+    private int execTransaction(String sql, ConnectionObj connectionObj, Object... objects){
         int result;
         PreparedStatement preparedStatement = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         printArguments(id, objects);
         try{
-            connection.setAutoCommit(false);
-            preparedStatement = connection.prepareStatement(sql);
+            connectionObj.getConnection().setAutoCommit(false);
+            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
             setArguments(preparedStatement, objects);
             result = preparedStatement.executeUpdate();
         }catch(Exception e){
@@ -173,15 +174,15 @@ public class Dao2 {
      */
     public int execList(String sql, List<Object[]> list){
         int result = 0;
-        Connection connection = null;
+        ConnectionObj connectionObj = null;
         PreparedStatement preparedStatement = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         try{
-            connection = ConnectionFactory.getConn();
-            boolean commit = connection.getAutoCommit();
-            connection.setAutoCommit(false);
-            preparedStatement = connection.prepareStatement(sql);
+            connectionObj = ConnectionFactory.getConn();
+            boolean commit = connectionObj.getConnection().getAutoCommit();
+            connectionObj.getConnection().setAutoCommit(false);
+            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
             int count = 0;
             if(list != null && !list.isEmpty()){
                 for(Object[] objects: list){
@@ -200,15 +201,17 @@ public class Dao2 {
                     result += Arrays.stream(results).filter(i -> i > 0).sum();
                 }
             }
-            connection.commit();
-            connection.setAutoCommit(commit);
+            connectionObj.getConnection().commit();
+            connectionObj.getConnection().setAutoCommit(commit);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
                 logger.error("ID: {}, 执行insert失败: ", id, e);
             }
-            rollback(connection);
+            if(connectionObj != null){
+                rollback(connectionObj.getConnection());
+            }
         }finally{
-            ConnectionFactory.add(connection);
+            ConnectionFactory.add(connectionObj);
             ConnectionFactory.close(preparedStatement);
         }
         printResult(id, result + "/" + (list == null ? 0 : list.size()));
@@ -216,24 +219,27 @@ public class Dao2 {
     }
 
     public <T> T find(Function<ResultSet, T> function, String sql, Object... objects){
-        Connection connection = ConnectionFactory.getConn(Thread.currentThread().getId());
-        if(connection == null){
+        ConnectionObj connectionObj = ConnectionFactory.getConn(Thread.currentThread().getId());
+        if(connectionObj == null){
             return find(function, sql, ConnectionFactory.getConn(), true, objects);
         }else{
-            return find(function, sql, connection, false, objects);
+            return find(function, sql, connectionObj, false, objects);
         }
     }
 
-    private <T> T find(Function<ResultSet, T> function, String sql, Connection connection, boolean needAdd, Object... objects) {
+    private <T> T find(Function<ResultSet, T> function, String sql, ConnectionObj connectionObj, boolean needAdd, Object... objects) {
         PreparedStatement preparedStatement = null;
         ResultSet resultSet = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         printArguments(id, objects);
         try{
-            preparedStatement = connection.prepareStatement(sql);
+            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
             setArguments(preparedStatement, objects);
             resultSet = preparedStatement.executeQuery();
+            if(function == null){
+                return null;
+            }
             return function.apply(resultSet);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
@@ -242,7 +248,7 @@ public class Dao2 {
         }finally{
             printResult(id, fetchSize(resultSet));
             if(needAdd){
-                ConnectionFactory.add(connection);
+                ConnectionFactory.add(connectionObj);
             }
             ConnectionFactory.close(preparedStatement, resultSet);
         }

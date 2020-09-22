@@ -1,10 +1,10 @@
 package com.xiaobin.sql;
 
 import com.xiaobin.conn.ConnectionFactory;
+import com.xiaobin.conn.ConnectionObj;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.function.Supplier;
 
@@ -22,17 +22,17 @@ public class Transaction {
             if(ConnectionFactory.getConn(id) == null){
                 ConnectionFactory.add(id, ConnectionFactory.getConn());
             }
-            Connection connection = ConnectionFactory.getConn(id);
+            ConnectionObj connectionObj = ConnectionFactory.getConn(id);
             try{
                 t = supplier.get();
-                connection.commit();
+                connectionObj.getConnection().commit();
             }catch(Exception e){
                 if(logger.isErrorEnabled()){
                     logger.error(e.getMessage(), e);
                 }
-                if(connection != null){
+                if(connectionObj != null){
                     try {
-                        connection.rollback();
+                        connectionObj.getConnection().rollback();
                     } catch (SQLException e1) {
                         if(logger.isErrorEnabled()){
                             logger.error("回滚失败: " + e.getMessage(), e1);

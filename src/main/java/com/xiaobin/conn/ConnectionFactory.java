@@ -15,8 +15,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ConnectionFactory {
 
     private static final Logger logger = LoggerFactory.getLogger(ConnectionFactory.class);
-    private static final ConcurrentLinkedQueue<Connection> connectionConcurrentLinkedQueue = new ConcurrentLinkedQueue<>();
-    private static final ConcurrentMap<Long, Connection> connectionConcurrentMap = new ConcurrentHashMap<>();
+    private static final ConcurrentLinkedQueue<ConnectionObj> connectionConcurrentLinkedQueue = new ConcurrentLinkedQueue<>();
+    private static final ConcurrentMap<Long, ConnectionObj> connectionConcurrentMap = new ConcurrentHashMap<>();
 
     private static final ConnectionFactory instance = new ConnectionFactory();
 
@@ -30,6 +30,8 @@ public class ConnectionFactory {
     private static final String url = "jdbc:mysql://127.0.0.1:3306/http?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true";
     private static final String username = "http";
     private static final String password = "http.1234";
+    private static final String ACTIVE_SQL = "select 1";
+    private static final int INACTIVE_TIME = 3600_000;//超时时间，毫秒
     private static final AtomicInteger atomicInteger = new AtomicInteger();//用于计数，增加了多少数据库连接
 
     private ConnectionFactory(){}
@@ -41,16 +43,17 @@ public class ConnectionFactory {
      * 获取数据库连接
      * @return connection
      */
-    public static Connection getConn(){
-        Connection connection = connectionConcurrentLinkedQueue.poll();
-        while(connection == null){
+    public static ConnectionObj getConn(){
+        ConnectionObj connectionObj = connectionConcurrentLinkedQueue.poll();
+        while(connectionObj == null){
             if(logger.isDebugEnabled()){
                 logger.debug("未获取到连接，重新获取一个");
             }
             instance.replenishConn();
-            connection = connectionConcurrentLinkedQueue.poll();
+            connectionObj = connectionConcurrentLinkedQueue.poll();
+            instance.initConn((maxKeep - minKeep) / 2 + minKeep, true);
         }
-        return connection;
+        return connectionObj;
     }
 
     /**
@@ -58,7 +61,7 @@ public class ConnectionFactory {
      * @param id 线程id
      * @return 连接
      */
-    public static Connection getConn(long id){
+    public static ConnectionObj getConn(long id){
         return connectionConcurrentMap.get(id);
     }
 
@@ -87,9 +90,55 @@ public class ConnectionFactory {
                 }
                 if(count < minKeep){
                     instance.initConn(maxKeep - count, true);
+                }else if(count > maxKeep){
+                    int length = count - maxKeep;
+                    for(int i=0; i<length; i++){
+                        ConnectionObj connectionObj = getConn();
+                        close(connectionObj.getConnection());
+                    }
                 }
             }
         }, 60_000, 60_000);
+
+        //XWB-2020/9/22- 为过时的connection执行sql
+        Timer activeTimer = new Timer();
+        activeTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                if(logger.isDebugEnabled()){
+                    logger.debug("开始为过时的connection执行指定sql：{}", ACTIVE_SQL);
+                }
+                int length = connectionConcurrentLinkedQueue.size();
+                if(length > 0){
+                    long current = System.currentTimeMillis();
+                    for(int i=0;i< length;i++){
+                        ConnectionObj connectionObj = connectionConcurrentLinkedQueue.poll();
+                        if(connectionObj != null){
+                            if(current - connectionObj.getLastUseTime() > INACTIVE_TIME){
+                                try(PreparedStatement preparedStatement = connectionObj.getConnection().prepareStatement(ACTIVE_SQL)) {
+                                    if(preparedStatement.execute()){
+                                        connectionObj.setLastUseTime();
+                                        connectionConcurrentLinkedQueue.add(connectionObj);
+                                    }else{
+                                        if(logger.isInfoEnabled()){
+                                            logger.info("执行sql失败：{}", ACTIVE_SQL);
+                                        }
+                                    }
+                                } catch (SQLException e) {
+                                    if(logger.isErrorEnabled()){
+                                        logger.error("刷新connection失败", e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    length = connectionConcurrentLinkedQueue.size();
+                    if(length < minKeep){
+                        instance.initConn((minKeep - length) / 2 + length, true);
+                    }
+                }
+            }
+        }, INACTIVE_TIME / 2, INACTIVE_TIME / 2);
     }
 
     /**
@@ -98,7 +147,8 @@ public class ConnectionFactory {
     private void replenishConn(){
         try {
             Connection connection = DriverManager.getConnection(url, username, password);
-            connectionConcurrentLinkedQueue.add(connection);
+            ConnectionObj connectionObj = new ConnectionObj(connection);
+            connectionConcurrentLinkedQueue.add(connectionObj);
             if(atomicInteger.incrementAndGet() >= 0){
                 replenish = false;
             }
@@ -150,11 +200,12 @@ public class ConnectionFactory {
 
     /**
      * 将用完的连接放入缓存
-     * @param connection 连接
+     * @param connectionObj 连接
      */
-    public static void add(Connection connection){
-        if(connection != null){
-            connectionConcurrentLinkedQueue.add(connection);
+    public static void add(ConnectionObj connectionObj){
+        if(connectionObj != null){
+            connectionConcurrentLinkedQueue.add(connectionObj);
+            connectionObj.setLastUseTime();
         }
         if(logger.isDebugEnabled()){
             logger.debug("当前连接数: " + connectionConcurrentLinkedQueue.size());
@@ -164,13 +215,13 @@ public class ConnectionFactory {
     /**
      * 将连接添加为事务连接
      * @param id 线程id
-     * @param connection 连接
+     * @param connectionObj 连接
      */
-    public static void add(long id, Connection connection){
+    public static void add(long id, ConnectionObj connectionObj){
         if(connectionConcurrentMap.containsKey(id)){
             throw new RuntimeException("该线程已存在连接，不允许添加");
         }
-        connectionConcurrentMap.put(id, connection);
+        connectionConcurrentMap.put(id, connectionObj);
     }
 
     /**
@@ -178,8 +229,20 @@ public class ConnectionFactory {
      * @param id 线程id
      */
     public static void close(long id){
-        Connection connection = connectionConcurrentMap.remove(id);
-        add(connection);
+        ConnectionObj connectionObj = connectionConcurrentMap.remove(id);
+        add(connectionObj);
+    }
+
+    public static void close(Connection connection){
+        if(connection != null){
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                if(logger.isErrorEnabled()){
+                    logger.error("关闭Connection失败: " + e.getMessage(), e);
+                }
+            }
+        }
     }
     /**
      * 关闭ps
