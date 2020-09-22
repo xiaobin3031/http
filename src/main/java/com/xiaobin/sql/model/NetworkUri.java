@@ -11,13 +11,31 @@ public class NetworkUri implements Dao {
     private Integer id;
     private String protocol;
     private String uri;
+    private Integer httpCode;
     private String server;
     private String title;
     private Long contentLength;
     private String contentType;
+    private String charset;
     private Integer status;
     private String message;
     private Integer level;
+
+    public String getCharset() {
+        return charset;
+    }
+
+    public void setCharset(String charset) {
+        this.charset = charset;
+    }
+
+    public Integer getHttpCode() {
+        return httpCode;
+    }
+
+    public void setHttpCode(Integer httpCode) {
+        this.httpCode = httpCode;
+    }
 
     public String getTitle() {
         return title;

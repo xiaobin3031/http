@@ -72,7 +72,7 @@ public class DbTable {
                     continue;
                 }
                 ColumnMethod columnMethod = new ColumnMethod(
-                        field.getName(),
+                        toLowerCase(field.getName()),
                         field.getType(),
                         getMethod,
                         setMethod);

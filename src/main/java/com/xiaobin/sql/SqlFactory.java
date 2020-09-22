@@ -148,7 +148,13 @@ public class SqlFactory {
                 valueList.add(object);
             }
         }
-        stringBuilder.replace(stringBuilder.length() - 1, stringBuilder.length(), "").append(" where 1 = 1");
+        if(valueList.isEmpty()){
+            if(logger.isDebugEnabled()){
+                logger.debug("没有值需要更新：{}", stringBuilder.toString());
+            }
+            return 0;
+        }
+        stringBuilder.replace(stringBuilder.length() - 1, stringBuilder.length(), "").append(" where");
         withIdWhere(stringBuilder, valueList, dbTable, t);
         return exec(stringBuilder.toString(), valueList.toArray());
     }
@@ -406,11 +412,13 @@ public class SqlFactory {
             throw new RuntimeException("id list 为空");
         }
         int index = 0;
-        String id = dbTable.getIdList().get(index);
+        String id = dbTable.getIdList().get(index++);
         Object object = getValue(dbTable.getColumnMethodMap().get(id).getGetMethod(), t);
         if(object == null){
             throw new RuntimeException("id["+id+"]值为空: ");
         }
+        stringBuilder.append(" ").append(id).append(" = ?");
+        valueList.add(object);
         for(; index < dbTable.getIdList().size(); index++){
             id = dbTable.getIdList().get(index);
             object = getValue(dbTable.getColumnMethodMap().get(id).getGetMethod(), t);

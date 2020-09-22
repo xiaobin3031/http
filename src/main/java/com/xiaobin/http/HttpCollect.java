@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -64,31 +63,57 @@ public class HttpCollect {
         return networkUri.page(start, end);
     }
 
+    private boolean isCharset(byte b, char c){
+        return b == '-' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    }
+
+    /**
+     * 获取网页上的编码，content-type中，如果mime后面有空格，就无法通过HttpURLConnection.getContentType读取到编码
+     * @param bytes 网页字节数组
+     * @return 编码，默认使用UTF-8
+     */
     private String getCharset(byte[] bytes){
-        byte[] tmp = new byte[LENGTH];
-        int index = 0;
-        while (!Arrays.equals(CHARSET_BYTE_ARRAY, tmp) && index + LENGTH < bytes.length) {
-            System.arraycopy(bytes, index, tmp, 0, LENGTH);
-            index++;
-        }
-        if(index + LENGTH >= bytes.length){
-            return "UTF-8";
-        }else{
-            while(bytes[index] != '='){
+        int i = 0, index = 0;
+        for(; i<= bytes.length - LENGTH && index < LENGTH; i++){
+            if(bytes[i] == CHARSET_BYTE_ARRAY[index]){
                 index++;
+            }else{
+                index = 0;
             }
-            int firstIndex = ++index;
+        }
+        if(i == bytes.length - LENGTH){
+            return StandardCharsets.UTF_8.toString();
+        }else{
+            int length = i + 50, firstIndex = 0, endIndex = 0;
             byte b;
             char c;
-            do{
-                b = bytes[index++];
+            for(; i < length; i++){
+                b = bytes[i];
                 c = (char) b;
-            }while(b == '-' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'));
-            int endIndex = index - 1;
-            tmp = new byte[endIndex - firstIndex];
+                if(isCharset(b, c)){
+                    if(firstIndex == 0){
+                        firstIndex = i;
+                    }
+                }else{
+                    if(firstIndex > 0){
+                        endIndex = i;
+                        break;
+                    }
+                }
+            }
+            byte[] tmp = new byte[endIndex - firstIndex];
             System.arraycopy(bytes, firstIndex, tmp, 0, tmp.length);
             return new String(tmp, StandardCharsets.UTF_8);
         }
+    }
+
+    /**
+     * uri中是否带协议
+     * @param uri uri
+     * @return true：带协议，false：不带协议
+     */
+    private boolean isWithSchema(String uri){
+        return uri.contains(":");
     }
     /**
      * 解析返回的信息
@@ -110,71 +135,53 @@ public class HttpCollect {
         }
         Pattern pattern = Pattern.compile("<title>(.+?)</title>");
         Matcher matcher = pattern.matcher(msg);
-        if(matcher.find()){
-            NetworkUri networkUri = new NetworkUri();
-            networkUri.setId(id);
-            networkUri.setTitle(matcher.group(1));
-            networkUri.update();
-        }
-        //XWB-2020/9/21- 解析连接，多种协议
-        pattern = Pattern.compile("" +
-                "(['\"])?" +
-                "((?:https?|data|file|ftp|mailto|magnet|telnet|urn):['\"]+)" +
-                "(?:\1)?");
-        matcher = pattern.matcher(msg);
-        while(matcher.find()){
-            NetworkUri networkUri = new NetworkUri();
-            networkUri.setLevel(level + 1);
-            try {
-                String string = matcher.group(2);
-                if(string.startsWith("http")){
-                    URL tmpUrl = new URL(string);
-                    withHttpUrl(tmpUrl, networkUri);
-                }else{
-                    URI uri = new URI(string);
-                    networkUri.setUri(uri.toString());
-                    networkUri.setProtocol(uri.getScheme());
-                    networkUri.setStatus(CodeKit.COMPLETE);//如果不是http，就直接完成
-                }
-            } catch (URISyntaxException | MalformedURLException e) {
-                if(logger.isErrorEnabled()){
-                    logger.error(e.getMessage(), e);
-                }
-            }
-            try{
-                networkUri.insert();
-            }catch(Exception e){
-                if(logger.isErrorEnabled()){
-                    logger.error(e.getMessage(), e);
-                }
-            }
-        }
-        //XWB-2020/9/21- 解析相对路径
-        pattern = Pattern.compile("(?:href|src)=(['\"])?([^:]+)(?:\1)?");
-        matcher = pattern.matcher(msg);
-        while(matcher.find()){
-            String string = matcher.group(2);
-            NetworkUri networkUri = new NetworkUri();
-            networkUri.setLevel(level + 1);
-            try{
-                URL tmpUrl = new URL(url, string);
-                withHttpUrl(tmpUrl, networkUri);
-            } catch (MalformedURLException e) {
-                if(logger.isErrorEnabled()){
-                    logger.error(e.getMessage(), e);
-                }
-            }
-            try{
-                networkUri.insert();
-            }catch(Exception e){
-                if(logger.isErrorEnabled()){
-                    logger.error(e.getMessage(), e);
-                }
-            }
-        }
+        String title = null;
         NetworkUri networkUri = new NetworkUri();
         networkUri.setId(id);
+        if(matcher.find()){
+            title = matcher.group(1);
+            networkUri.setTitle(title);
+        }
+        networkUri.setCharset(charset);
+        networkUri.update();
+        //XWB-2020/9/21- 解析路径
+        pattern = Pattern.compile("<a[^>]+href=['\"]?([^'\"\\s>]+)[^>]*>");
+        matcher = pattern.matcher(msg);
+        while(matcher.find()){
+            String string = matcher.group(1);
+            networkUri = new NetworkUri();
+            networkUri.setLevel(level + 1);
+            try{
+                if (isWithSchema(string)) {
+                    if(string.startsWith("http")){
+                        URL tmpUrl = new URL(string);
+                        withHttpUrl(tmpUrl, networkUri);
+                    }else{
+                        URI uri = new URI(string);
+                        networkUri.setUri(uri.toString());
+                        networkUri.setProtocol(uri.getScheme());
+                        networkUri.setStatus(CodeKit.COMPLETE);//如果不是http，就直接完成
+                        //XWB-2020/9/22- 完成时，将当前页的标题赋值给它
+                        networkUri.setTitle(title);
+                    }
+                }else{
+                    URL tmpUrl = new URL(url, string);
+                    withHttpUrl(tmpUrl, networkUri);
+                }
+            } catch (MalformedURLException | URISyntaxException e) {
+                if(logger.isErrorEnabled()){
+                    logger.error(e.getMessage(), e);
+                }
+                networkUri.setUri(string);
+                networkUri.setStatus(CodeKit.ERROR);
+                networkUri.setMessage(e.getMessage());
+            }
+            networkUri.insert();
+        }
+        networkUri = new NetworkUri();
+        networkUri.setId(id);
         networkUri.setStatus(CodeKit.COMPLETE);
+        networkUri.update();
     }
 
     private void withHttpUrl(URL url, NetworkUri networkUri){
@@ -204,18 +211,20 @@ public class HttpCollect {
             }
             List<NetworkUri> networkUriList = page.getList();
             for(NetworkUri networkUri: networkUriList){
+                NetworkUri newNetworkUri = new NetworkUri();
+                newNetworkUri.setId(networkUri.getId());
                 try{
                     URL url = new URL(networkUri.getUri());
                     HttpURLConnection httpURLConnection = getConnection(url);
                     httpURLConnection.connect();
 
                     int code = httpURLConnection.getResponseCode();
-                    networkUri.setStatus(code);
+                    newNetworkUri.setHttpCode(code);
+                    newNetworkUri.setServer(httpURLConnection.getHeaderField("Server"));
+                    newNetworkUri.setContentLength(httpURLConnection.getHeaderFieldLong("Content-Length", 0));
+                    String contentType = httpURLConnection.getHeaderField("Content-Type");
+                    newNetworkUri.setContentType(contentType);
                     if(code == 200){
-                        networkUri.setServer(httpURLConnection.getHeaderField("Server"));
-                        networkUri.setContentLength(httpURLConnection.getHeaderFieldLong("Content-Length", 0));
-                        String contentType = httpURLConnection.getHeaderField("Content-Type");
-                        networkUri.setContentType(contentType);
                         if(contentType.contains("text/")){
                             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                             byte[] bytes = new byte[1024];
@@ -225,19 +234,22 @@ public class HttpCollect {
                             executor.execute(() -> withResponse(byteArrayOutputStream.toByteArray(), networkUri.getId(), url, networkUri.getLevel()));
                         }else{
                             //XWB-2020/9/21- 如果不是text/，就直接完成
-                            networkUri.setStatus(CodeKit.COMPLETE);
+                            newNetworkUri.setStatus(CodeKit.COMPLETE);
                         }
                     }else{
-                        networkUri.setMessage(httpURLConnection.getResponseMessage());
+                        newNetworkUri.setMessage(httpURLConnection.getResponseMessage());
 
                     }
                     httpURLConnection.disconnect();
-                    networkUri.update();
                 }catch(IOException ioException){
                     if(logger.isErrorEnabled()){
-                        logger.error(ioException.getMessage(), ioException);
+                        logger.error("uri: {}", networkUri.getUri(), ioException);
+                        logger.error(ioException.getCause().toString());
                     }
+                    newNetworkUri.setStatus(CodeKit.ERROR);
+                    newNetworkUri.setMessage(ioException.getMessage());
                 }
+                newNetworkUri.update();
             }
             start += size;
 

@@ -44,16 +44,19 @@ delimiter ;
 -- auto-generated definition
 create table network_uri
 (
-    id            int           not null
+    id             int auto_increment
         primary key,
-    protocol      varchar(16)   not null comment '协议',
-    uri           varchar(256)  not null comment '地址',
-    server        varchar(256)  null comment '服务器类型',
-    contentType   varchar(64)   null,
-    contentLength int default 0 not null,
-    status        int default 0 not null comment '状态',
-    message       varchar(512)  null comment '信息',
-    level         int default 0 not null comment '等级',
+    protocol       varchar(16)      not null comment '协议',
+    uri            varchar(256)     not null comment '地址',
+    http_code      int    default 0 not null comment 'http状态码',
+    server         varchar(256)     null comment '服务器类型',
+    title          varchar(128)     null comment '标题',
+    content_type   varchar(64)      null,
+    content_length bigint default 0 not null,
+    charset        varchar(16)      null comment '解析网页所用的编码',
+    status         int    default 0 not null comment '状态',
+    message        varchar(512)     null comment '信息',
+    level          int    default 0 not null comment '等级',
     constraint network_uri_uri_uindex
         unique (uri)
 )
