@@ -44,7 +44,7 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
     protected final void _init(){
         init();
 
-        initConn((connectionConfig.getMaxKeep() - connectionConfig.getMinKeep()) / 2, false);
+        initConn((connectionConfig.getMaxKeep() - connectionConfig.getMinKeep()) / 2 + connectionConfig.getMinKeep(), false);
         //XWB-2020/9/18- 自动添加连接数
         Timer timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
