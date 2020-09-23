@@ -1,7 +1,7 @@
 package com.xiaobin.sql;
 
-import com.xiaobin.conn.ConnectionFactory;
-import com.xiaobin.conn.ConnectionObj;
+import com.xiaobin.conn.db.DbConfig;
+import com.xiaobin.conn.db.DbConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,12 +91,12 @@ public class Dao2 {
      * @return 影响的条数
      */
     public int exec(String sql, Object... objects){
-        ConnectionObj connectionObj = ConnectionFactory.getConn(Thread.currentThread().getId());
+        DbConfig dbConfig = DbConnection.getInstance().getConn(Thread.currentThread().getId());
         int result;
-        if(connectionObj == null){
-            result = exec(sql, ConnectionFactory.getConn(), objects);
+        if(dbConfig == null){
+            result = exec(sql, DbConnection.getInstance().getConn(), objects);
         }else{
-            result = execTransaction(sql, connectionObj, objects);
+            result = execTransaction(sql, dbConfig, objects);
         }
         return result;
     }
@@ -104,32 +104,32 @@ public class Dao2 {
     /**
      * 执行无事务的sql
      * @param sql sql
-     * @param connectionObj 连接
+     * @param dbConfig 连接
      * @param objects 参数
      * @return 影响的结果
      */
-    private int exec(String sql, ConnectionObj connectionObj, Object... objects){
+    private int exec(String sql, DbConfig dbConfig, Object... objects){
         int result = 0;
         PreparedStatement preparedStatement = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         printArguments(id, objects);
         try{
-            boolean commit = connectionObj.getConnection().getAutoCommit();
-            connectionObj.getConnection().setAutoCommit(false);
-            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
+            boolean commit = dbConfig.getConnection().getAutoCommit();
+            dbConfig.getConnection().setAutoCommit(false);
+            preparedStatement = dbConfig.getConnection().prepareStatement(sql);
             setArguments(preparedStatement, objects);
             result = preparedStatement.executeUpdate();
-            connectionObj.getConnection().commit();
-            connectionObj.getConnection().setAutoCommit(commit);
+            dbConfig.getConnection().commit();
+            dbConfig.getConnection().setAutoCommit(commit);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
                 logger.error("ID: {}, 执行sql失败: ", id, e);
             }
-            rollback(connectionObj.getConnection());
+            rollback(dbConfig.getConnection());
         }finally{
-            ConnectionFactory.add(connectionObj);
-            ConnectionFactory.close(preparedStatement);
+            DbConnection.getInstance().inPool(dbConfig);
+            DbConnection.getInstance().close(preparedStatement);
         }
         printResult(id, result);
         return result;
@@ -138,19 +138,19 @@ public class Dao2 {
     /**
      * 执行事务的sql
      * @param sql sql
-     * @param connectionObj 连接
+     * @param dbConfig 连接
      * @param objects 参数
      * @return 影响的参数
      */
-    private int execTransaction(String sql, ConnectionObj connectionObj, Object... objects){
+    private int execTransaction(String sql, DbConfig dbConfig, Object... objects){
         int result;
         PreparedStatement preparedStatement = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         printArguments(id, objects);
         try{
-            connectionObj.getConnection().setAutoCommit(false);
-            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
+            dbConfig.getConnection().setAutoCommit(false);
+            preparedStatement = dbConfig.getConnection().prepareStatement(sql);
             setArguments(preparedStatement, objects);
             result = preparedStatement.executeUpdate();
         }catch(Exception e){
@@ -160,7 +160,7 @@ public class Dao2 {
             //XWB-2020/8/25- 需要抛出异常来让事务类捕获，使之回滚
             throw new RuntimeException(e);
         }finally{
-            ConnectionFactory.close(preparedStatement);
+            DbConnection.getInstance().close(preparedStatement);
         }
         printResult(id, result);
         return result;
@@ -174,15 +174,15 @@ public class Dao2 {
      */
     public int execList(String sql, List<Object[]> list){
         int result = 0;
-        ConnectionObj connectionObj = null;
+        DbConfig dbConfig = null;
         PreparedStatement preparedStatement = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         try{
-            connectionObj = ConnectionFactory.getConn();
-            boolean commit = connectionObj.getConnection().getAutoCommit();
-            connectionObj.getConnection().setAutoCommit(false);
-            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
+            dbConfig = DbConnection.getInstance().getConn();
+            boolean commit = dbConfig.getConnection().getAutoCommit();
+            dbConfig.getConnection().setAutoCommit(false);
+            preparedStatement = dbConfig.getConnection().prepareStatement(sql);
             int count = 0;
             if(list != null && !list.isEmpty()){
                 for(Object[] objects: list){
@@ -201,40 +201,40 @@ public class Dao2 {
                     result += Arrays.stream(results).filter(i -> i > 0).sum();
                 }
             }
-            connectionObj.getConnection().commit();
-            connectionObj.getConnection().setAutoCommit(commit);
+            dbConfig.getConnection().commit();
+            dbConfig.getConnection().setAutoCommit(commit);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
                 logger.error("ID: {}, 执行insert失败: ", id, e);
             }
-            if(connectionObj != null){
-                rollback(connectionObj.getConnection());
+            if(dbConfig != null){
+                rollback(dbConfig.getConnection());
             }
         }finally{
-            ConnectionFactory.add(connectionObj);
-            ConnectionFactory.close(preparedStatement);
+            DbConnection.getInstance().inPool(dbConfig);
+            DbConnection.getInstance().close(preparedStatement);
         }
         printResult(id, result + "/" + (list == null ? 0 : list.size()));
         return result;
     }
 
     public <T> T find(Function<ResultSet, T> function, String sql, Object... objects){
-        ConnectionObj connectionObj = ConnectionFactory.getConn(Thread.currentThread().getId());
-        if(connectionObj == null){
-            return find(function, sql, ConnectionFactory.getConn(), true, objects);
+        DbConfig dbConfig = DbConnection.getInstance().getConn(Thread.currentThread().getId());
+        if(dbConfig == null){
+            return find(function, sql, DbConnection.getInstance().getConn(), true, objects);
         }else{
-            return find(function, sql, connectionObj, false, objects);
+            return find(function, sql, dbConfig, false, objects);
         }
     }
 
-    private <T> T find(Function<ResultSet, T> function, String sql, ConnectionObj connectionObj, boolean needAdd, Object... objects) {
+    private <T> T find(Function<ResultSet, T> function, String sql, DbConfig dbConfig, boolean needAdd, Object... objects) {
         PreparedStatement preparedStatement = null;
         ResultSet resultSet = null;
         long id = atomicLong.incrementAndGet();
         printSql(id, sql);
         printArguments(id, objects);
         try{
-            preparedStatement = connectionObj.getConnection().prepareStatement(sql);
+            preparedStatement = dbConfig.getConnection().prepareStatement(sql);
             setArguments(preparedStatement, objects);
             resultSet = preparedStatement.executeQuery();
             if(function == null){
@@ -248,9 +248,9 @@ public class Dao2 {
         }finally{
             printResult(id, fetchSize(resultSet));
             if(needAdd){
-                ConnectionFactory.add(connectionObj);
+                DbConnection.getInstance().inPool(dbConfig);
             }
-            ConnectionFactory.close(preparedStatement, resultSet);
+            DbConnection.getInstance().close(preparedStatement, resultSet);
         }
         return null;
     }

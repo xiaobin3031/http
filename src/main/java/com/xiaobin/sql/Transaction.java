@@ -1,7 +1,7 @@
 package com.xiaobin.sql;
 
-import com.xiaobin.conn.ConnectionFactory;
-import com.xiaobin.conn.ConnectionObj;
+import com.xiaobin.conn.db.DbConfig;
+import com.xiaobin.conn.db.DbConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,20 +19,20 @@ public class Transaction {
         T t = null;
         if(supplier != null){
             long id = Thread.currentThread().getId();
-            if(ConnectionFactory.getConn(id) == null){
-                ConnectionFactory.add(id, ConnectionFactory.getConn());
+            if(DbConnection.getInstance().getConn(id) == null){
+                DbConnection.getInstance().inThread(id, DbConnection.getInstance().getConn());
             }
-            ConnectionObj connectionObj = ConnectionFactory.getConn(id);
+            DbConfig dbConfig = DbConnection.getInstance().getConn(id);
             try{
                 t = supplier.get();
-                connectionObj.getConnection().commit();
+                dbConfig.getConnection().commit();
             }catch(Exception e){
                 if(logger.isErrorEnabled()){
                     logger.error(e.getMessage(), e);
                 }
-                if(connectionObj != null){
+                if(dbConfig != null){
                     try {
-                        connectionObj.getConnection().rollback();
+                        dbConfig.getConnection().rollback();
                     } catch (SQLException e1) {
                         if(logger.isErrorEnabled()){
                             logger.error("回滚失败: " + e.getMessage(), e1);
@@ -40,7 +40,7 @@ public class Transaction {
                     }
                 }
             } finally{
-                ConnectionFactory.close(id);
+                DbConnection.getInstance().removeFromThread(id);
             }
         }
         return t;
