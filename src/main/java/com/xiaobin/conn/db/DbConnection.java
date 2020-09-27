@@ -9,7 +9,7 @@ import java.sql.*;
 /**
  * 数据库连接管理
  */
-public class DbConnection extends AbstractConnectionFactory<DbConfig> {
+public class DbConnection extends AbstractConnectionFactory<DbObj> {
 
     private static final Logger logger = LoggerFactory.getLogger(DbConnection.class);
 
@@ -45,16 +45,16 @@ public class DbConnection extends AbstractConnectionFactory<DbConfig> {
     }
 
     @Override
-    protected DbConfig getSingleConn() throws Exception{
+    protected DbObj getSingleConn() throws Exception{
         Connection connection = DriverManager.getConnection(url, username, password);
-        return new DbConfig(connection);
+        return new DbObj(connection);
     }
 
     @Override
-    protected void refreshConn(DbConfig dbConfig) throws Exception{
-        try(PreparedStatement preparedStatement = dbConfig.getConnection().prepareStatement(ACTIVE_SQL)) {
+    protected void refreshConn(DbObj dbObj) throws Exception{
+        try(PreparedStatement preparedStatement = dbObj.getConnection().prepareStatement(ACTIVE_SQL)) {
             if(preparedStatement.execute()){
-                dbConfig.setLastUseTime();
+                dbObj.setLastUseTime();
             }else{
                 throw new RuntimeException("执行sql失败：" + ACTIVE_SQL);
             }
@@ -62,10 +62,10 @@ public class DbConnection extends AbstractConnectionFactory<DbConfig> {
     }
 
     @Override
-    protected void close(DbConfig dbConfig) {
-        if(dbConfig != null && dbConfig.getConnection() != null){
+    public void close(DbObj dbObj) {
+        if(dbObj.getConnection() != null){
             try {
-                dbConfig.getConnection().close();
+                dbObj.getConnection().close();
             } catch (SQLException e) {
                 if(logger.isErrorEnabled()){
                     logger.error("关闭Connection失败: " + e.getMessage(), e);

@@ -4,11 +4,11 @@ import com.xiaobin.conn.ConnectionObj;
 
 import java.sql.Connection;
 
-public class DbConfig extends ConnectionObj {
+public class DbObj extends ConnectionObj {
 
-    private Connection connection;
+    private final Connection connection;
 
-    DbConfig(Connection connection){
+    DbObj(Connection connection){
         super();
         this.connection = connection;
     }

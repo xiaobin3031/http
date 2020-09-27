@@ -1,6 +1,6 @@
 package com.xiaobin.sql;
 
-import com.xiaobin.conn.db.DbConfig;
+import com.xiaobin.conn.db.DbObj;
 import com.xiaobin.conn.db.DbConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,17 +22,17 @@ public class Transaction {
             if(DbConnection.getInstance().getConn(id) == null){
                 DbConnection.getInstance().inThread(id, DbConnection.getInstance().getConn());
             }
-            DbConfig dbConfig = DbConnection.getInstance().getConn(id);
+            DbObj dbObj = DbConnection.getInstance().getConn(id);
             try{
                 t = supplier.get();
-                dbConfig.getConnection().commit();
+                dbObj.getConnection().commit();
             }catch(Exception e){
                 if(logger.isErrorEnabled()){
                     logger.error(e.getMessage(), e);
                 }
-                if(dbConfig != null){
+                if(dbObj != null){
                     try {
-                        dbConfig.getConnection().rollback();
+                        dbObj.getConnection().rollback();
                     } catch (SQLException e1) {
                         if(logger.isErrorEnabled()){
                             logger.error("回滚失败: " + e.getMessage(), e1);

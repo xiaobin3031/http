@@ -1,5 +1,6 @@
 package com.xiaobin.conn;
 
+import com.sun.istack.internal.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +59,10 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
                     initConn(connectionConfig.getMaxKeep() - count, true);
                 }else if(count > connectionConfig.getMaxKeep()){
                     while(connectionConcurrentLinkedQueue.size() > connectionConfig.getMaxKeep()){
-                        close(getConn());
+                        T t = getConn();
+                        if(t != null){
+                            close(t);
+                        }
                     }
                 }
             }
@@ -175,7 +179,7 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
      * 关闭对象
      * @param t 对象
      */
-    protected abstract void close(T t);
+    public abstract void close(@NotNull T t);
     /**
      * 获取连接对象
      * @return 连接对象
