@@ -146,8 +146,9 @@ public class HttpCollect {
         networkUri.setCharset(charset);
         networkUri.update();
         //XWB-2020/9/21- 解析路径
-        pattern = Pattern.compile("<a[^>]+href=['\"]?([^'\"\\s>]+)[^>]*>");
+        pattern = Pattern.compile("<a[^>]+href=['\"]?([^'\"\\s><]+)[^><]*>");
         matcher = pattern.matcher(msg);
+        NetworkUri tmp = new NetworkUri();
         while(matcher.find()){
             String string = matcher.group(1);
             networkUri = new NetworkUri();
@@ -177,7 +178,10 @@ public class HttpCollect {
                 networkUri.setStatus(CodeKit.ERROR);
                 networkUri.setMessage(e.getMessage());
             }
-            networkUri.insert();
+            tmp.setUri(networkUri.getUri());
+            if(tmp.find().isEmpty()){
+                networkUri.insert();
+            }
         }
         networkUri = new NetworkUri();
         networkUri.setId(id);
@@ -239,7 +243,7 @@ public class HttpCollect {
                         }
                     }else{
                         newNetworkUri.setMessage(httpURLConnection.getResponseMessage());
-
+                        networkUri.setStatus(CodeKit.COMPLETE);
                     }
                     httpURLConnection.disconnect();
                 }catch(IOException ioException){
@@ -253,9 +257,6 @@ public class HttpCollect {
                 newNetworkUri.update();
             }
             start += size;
-
-            //todo 测试代码，只执行一次
-            break;
         }
     }
 

@@ -60,9 +60,7 @@ public class Dao2 {
                 try {
                     preparedStatement.setObject(i + 1, objects[i]);
                 } catch (SQLException e) {
-                    if(logger.isErrorEnabled()){
-                        logger.error("设置preparedStatement出错: " + e.getMessage(), e);
-                    }
+                    logSqlException(e);
                     throw new RuntimeException(e);
                 }
             }
@@ -77,9 +75,7 @@ public class Dao2 {
             try {
                 connection.rollback();
             } catch (SQLException e) {
-                if(logger.isErrorEnabled()){
-                    logger.error("回滚失败: " + e.getMessage(), e);
-                }
+                logSqlException(e);
             }
         }
     }
@@ -124,8 +120,9 @@ public class Dao2 {
             dbObj.getConnection().setAutoCommit(commit);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
-                logger.error("ID: {}, 执行sql失败: ", id, e);
+                logger.error("ID: {}, 执行sql失败: ", id);
             }
+            logSqlException(e);
             rollback(dbObj.getConnection());
         }finally{
             DbConnection.getInstance().inPool(dbObj);
@@ -155,8 +152,9 @@ public class Dao2 {
             result = preparedStatement.executeUpdate();
         }catch(Exception e){
             if(logger.isErrorEnabled()){
-                logger.error("ID: {}, 执行sql失败: ", id, e);
+                logger.error("ID: {}, 执行sql失败: ", id);
             }
+            logSqlException(e);
             //XWB-2020/8/25- 需要抛出异常来让事务类捕获，使之回滚
             throw new RuntimeException(e);
         }finally{
@@ -205,8 +203,9 @@ public class Dao2 {
             dbObj.getConnection().setAutoCommit(commit);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
-                logger.error("ID: {}, 执行insert失败: ", id, e);
+                logger.error("ID: {}, 执行insert失败: ", id);
             }
+            logSqlException(e);
             if(dbObj != null){
                 rollback(dbObj.getConnection());
             }
@@ -243,8 +242,9 @@ public class Dao2 {
             return function.apply(resultSet);
         }catch(Exception e){
             if(logger.isErrorEnabled()){
-                logger.error("ID: {}, 执行sql失败: ", id, e);
+                logger.error("ID: {}, 执行sql失败: ", id);
             }
+            logSqlException(e);
         }finally{
             printResult(id, fetchSize(resultSet));
             if(needAdd){
@@ -255,6 +255,20 @@ public class Dao2 {
         return null;
     }
 
+    private void logSqlException(Exception e){
+        if(logger.isErrorEnabled()){
+            if(e instanceof SQLException){
+                String msg = e.getMessage();
+                if (msg.contains("Duplicate entry")) {
+                    logger.error(msg);
+                }else{
+                    logger.error(msg, e);
+                }
+            }else{
+                logger.error(e.getMessage(), e);
+            }
+        }
+    }
     /**
      * 计算查询总条数
      * @param resultSet resultSet
@@ -267,17 +281,13 @@ public class Dao2 {
                 while(resultSet.next()){
                     index++;
                 }
-            }catch(SQLException e){
-                if(logger.isErrorEnabled()){
-                    logger.error(e.getMessage(), e);
-                }
+            }catch(Exception e){
+                logSqlException(e);
             } finally{
                 try {
                     resultSet.beforeFirst();
-                } catch (SQLException sqlException) {
-                    if(logger.isErrorEnabled()){
-                        logger.error(sqlException.getMessage(), sqlException);
-                    }
+                } catch (Exception sqlException) {
+                    logSqlException(sqlException);
                 }
             }
         }
