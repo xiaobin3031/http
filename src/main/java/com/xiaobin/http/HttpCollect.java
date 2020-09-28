@@ -120,10 +120,11 @@ public class HttpCollect {
      * 解析返回的信息
      * @param bytes 网页信息
      * @param id 数据id
+     * @param topParentId 顶级父类
      * @param url url
      * @param level 等级
      */
-    private void withResponse(byte[] bytes, int id, URL url, int level){
+    private void withResponse(byte[] bytes, int id, int topParentId, URL url, int level){
         String charset = getCharset(bytes);
         String msg;
         try {
@@ -180,6 +181,12 @@ public class HttpCollect {
             }
             tmp.setUri(networkUri.getUri());
             if(tmp.find().isEmpty()){
+                networkUri.setParentId(id);
+                if(topParentId == 0){
+                    networkUri.setTopParentId(id);
+                }else{
+                    networkUri.setTopParentId(topParentId);
+                }
                 networkUri.insert();
             }
         }
@@ -236,7 +243,9 @@ public class HttpCollect {
                             while(httpURLConnection.getInputStream().read(bytes) != -1){
                                 byteArrayOutputStream.write(bytes);
                             }
-                            executor.execute(() -> withResponse(byteArrayOutputStream.toByteArray(), networkUri.getId(), url, networkUri.getLevel()));
+                            executor.execute(() ->
+                                    withResponse(byteArrayOutputStream.toByteArray(), networkUri.getId(),
+                                            networkUri.getTopParentId(), url, networkUri.getLevel()));
                         }else{
                             //XWB-2020/9/21- 如果不是text/，就直接完成
                             newNetworkUri.setStatus(CodeKit.COMPLETE);

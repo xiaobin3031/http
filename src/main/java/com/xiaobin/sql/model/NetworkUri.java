@@ -9,6 +9,8 @@ public class NetworkUri implements Dao {
 
     @ID
     private Integer id;
+    private Integer parentId;
+    private Integer topParentId;
     private String protocol;
     private String uri;
     private Integer httpCode;
@@ -20,6 +22,22 @@ public class NetworkUri implements Dao {
     private Integer status;
     private String message;
     private Integer level;
+
+    public Integer getTopParentId() {
+        return topParentId;
+    }
+
+    public void setTopParentId(Integer topParentId) {
+        this.topParentId = topParentId;
+    }
+
+    public Integer getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(Integer parentId) {
+        this.parentId = parentId;
+    }
 
     public String getCharset() {
         return charset;
