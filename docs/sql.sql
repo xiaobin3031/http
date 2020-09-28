@@ -40,12 +40,12 @@ end ;;
 
 delimiter ;
 
-
--- auto-generated definition
 create table network_uri
 (
     id             int auto_increment
         primary key,
+    parent_id      int    default 0 not null,
+    top_parent_id  int    default 0 not null comment '顶级父类',
     protocol       varchar(16)      not null comment '协议',
     uri            varchar(256)     not null comment '地址',
     http_code      int    default 0 not null comment 'http状态码',
@@ -62,8 +62,9 @@ create table network_uri
 )
     comment 'uri';
 
-create unique index network_uri_uri_uindex
-	on network_uri (uri);
+create index network_uri_top_parent_id_index
+    on network_uri (top_parent_id);
+
 
 	create table constant
 (
