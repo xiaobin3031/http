@@ -25,7 +25,7 @@
     </appender>
 
     <logger name="com.xiaobin.sql" value="DEBUG"/>
-    <logger name="com.xiaobin.http" value="DEBUG"/>
+    <logger name="com.xiaobin.collect.http" value="DEBUG"/>
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />

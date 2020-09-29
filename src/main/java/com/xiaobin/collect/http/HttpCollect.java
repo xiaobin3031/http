@@ -1,9 +1,10 @@
-package com.xiaobin.http;
+package com.xiaobin.collect.http;
 
 import com.xiaobin.sql.Page;
 import com.xiaobin.sql.model.NetworkUri;
 import com.xiaobin.util.CharsetKit;
 import com.xiaobin.util.CodeKit;
+import com.xiaobin.util.Strkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -159,6 +160,10 @@ public class HttpCollect {
                     if(string.startsWith("http")){
                         URL tmpUrl = new URL(string);
                         withHttpUrl(tmpUrl, networkUri);
+                        if(Strkit.isEmpty(tmpUrl.getFile())){
+                            //XWB-2020/9/29- 将没有子目录的url的级别设置成0
+                            networkUri.setLevel(0);
+                        }
                     }else{
                         URI uri = new URI(string);
                         networkUri.setUri(uri.toString());
@@ -187,6 +192,7 @@ public class HttpCollect {
                 }else{
                     networkUri.setTopParentId(topParentId);
                 }
+
                 networkUri.insert();
             }
         }
