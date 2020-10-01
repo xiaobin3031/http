@@ -170,7 +170,7 @@ public class SqlFactory {
         List<Object> valueList = new ArrayList<>();
         StringBuilder stringBuilder = new StringBuilder("delete from ")
                 .append(dbTable.getTableName())
-                .append(" where 1 = 1");
+                .append(" where");
         withIdWhere(stringBuilder, valueList, dbTable, t);
         return exec(stringBuilder.toString(), valueList.toArray());
     }
@@ -191,7 +191,6 @@ public class SqlFactory {
             valueList.add(object);
         }else{
             //XWB-2020/9/18- 多个id值，从t中获取信息
-            stringBuilder.append("1 = 1");
             withIdWhere(stringBuilder, valueList, dbTable, t);
         }
         return execQuery(resultSet -> {

@@ -1,5 +1,6 @@
 package com.xiaobin.collect.http;
 
+import com.xiaobin.collect.MainCollect;
 import com.xiaobin.sql.Page;
 import com.xiaobin.sql.model.NetworkUri;
 import com.xiaobin.util.CharsetKit;
@@ -32,7 +33,7 @@ import java.util.regex.Pattern;
  * 7 = "Date"
  * 8 = "Content-Type"
  */
-public class HttpCollect {
+public class HttpCollect extends MainCollect {
 
     private static final Logger logger = LoggerFactory.getLogger(HttpCollect.class);
 
@@ -40,6 +41,17 @@ public class HttpCollect {
 
     private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'c', 'h', 'a', 'r', 's', 'e', 't'};
     private static final int LENGTH = CHARSET_BYTE_ARRAY.length;
+
+    private volatile boolean started = false;
+
+    private final static HttpCollect instance = new HttpCollect();
+
+    private HttpCollect(){}
+
+    public static HttpCollect getInstance() {
+        return instance;
+    }
+
     /**
      * 获取http连接
      * @param url url
@@ -210,7 +222,16 @@ public class HttpCollect {
             networkUri.setStatus(CodeKit.GOV_NET);
         }
     }
-    private void start(){
+
+    @Override
+    public void start(){
+        if(this.started){
+            return;
+        }
+        if(logger.isDebugEnabled()){
+            logger.debug("启动手机类: {}", HttpCollect.class.getName());
+        }
+        this.started = true;
         int start = 0, size = 100;
         while(true){
             Page<NetworkUri> page = uriList(start, start + size);
@@ -231,6 +252,13 @@ public class HttpCollect {
             for(NetworkUri networkUri: networkUriList){
                 NetworkUri newNetworkUri = new NetworkUri();
                 newNetworkUri.setId(networkUri.getId());
+                newNetworkUri.setStatus(CodeKit.FETCHING);
+                if(newNetworkUri.update() != 1){
+                    if(logger.isDebugEnabled()){
+                        logger.debug("{} 已经在处理", networkUri.getUri());
+                    }
+                    continue;
+                }
                 try{
                     URL url = new URL(networkUri.getUri());
                     HttpURLConnection httpURLConnection = getConnection(url);
@@ -273,10 +301,5 @@ public class HttpCollect {
             }
             start += size;
         }
-    }
-
-    public static void main(String[] args) {
-        HttpCollect httpCollect = new HttpCollect();
-        httpCollect.start();
     }
 }

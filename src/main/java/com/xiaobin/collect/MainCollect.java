@@ -1,0 +1,44 @@
+package com.xiaobin.collect;
+
+import com.xiaobin.collect.http.HttpCollect;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.*;
+
+/**
+ * 收集总类
+ */
+public abstract class MainCollect {
+
+    private static final Logger logger = LoggerFactory.getLogger(MainCollect.class);
+
+    private final static ConcurrentMap<String, MainCollect> mainCollectConcurrentMap = new ConcurrentHashMap<>();
+
+    /**
+     * 启动
+     */
+    protected abstract void start();
+
+    /**
+     * 注册启动信息
+     */
+    private static void register(){
+        mainCollectConcurrentMap.put(HttpCollect.class.getName(), HttpCollect.getInstance());
+    }
+
+    public static void main(String[] args) {
+        if(logger.isInfoEnabled()){
+            logger.info("收集启动");
+        }
+        register();
+        if(mainCollectConcurrentMap.isEmpty()){
+            if(logger.isInfoEnabled()){
+                logger.info("尚未注册收集子类，退出");
+            }
+        }else{
+            ExecutorService executor = Executors.newFixedThreadPool(mainCollectConcurrentMap.size());
+            mainCollectConcurrentMap.values().forEach(t -> executor.execute(t::start));
+        }
+    }
+}
