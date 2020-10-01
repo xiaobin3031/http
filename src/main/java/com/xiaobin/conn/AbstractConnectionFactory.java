@@ -1,6 +1,5 @@
 package com.xiaobin.conn;
 
-import com.sun.istack.internal.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -179,7 +178,7 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
      * 关闭对象
      * @param t 对象
      */
-    public abstract void close(@NotNull T t);
+    public abstract void close(T t);
     /**
      * 获取连接对象
      * @return 连接对象
