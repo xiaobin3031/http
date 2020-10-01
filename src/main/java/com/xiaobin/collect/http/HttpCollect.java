@@ -284,10 +284,9 @@ public class HttpCollect extends MainCollect {
                         networkUri.setStatus(CodeKit.COMPLETE);
                     }
                     httpURLConnection.disconnect();
-                }catch(IOException ioException){
+                }catch(Exception ioException){
                     if(logger.isErrorEnabled()){
                         logger.error("uri: {}", networkUri.getUri(), ioException);
-                        logger.error(ioException.getCause().toString());
                     }
                     newNetworkUri.setStatus(CodeKit.ERROR);
                     newNetworkUri.setMessage(ioException.getMessage());
