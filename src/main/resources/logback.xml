@@ -15,7 +15,7 @@
               class="ch.qos.logback.core.rolling.RollingFileAppender">
         <Encoding>UTF-8</Encoding>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <FileNamePattern>${LOG_HOME}/http.%d{yyyy-MM-dd}.log</FileNamePattern>
+            <FileNamePattern>${LOG_HOME}/http.%d{yyyy-MM-dd}.%i.log</FileNamePattern>
             <MaxHistory>30</MaxHistory>
             <maxFileSize>500MB</maxFileSize>
         </rollingPolicy>
@@ -25,7 +25,7 @@
     </appender>
 
     <logger name="com.xiaobin.sql" value="DEBUG"/>
-    <logger name="com.xiaobin.collect.http" value="DEBUG"/>
+    <logger name="com.xiaobin.collect" value="DEBUG"/>
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />

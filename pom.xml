@@ -57,7 +57,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.xiaobin.collect.MainCollect</mainClass>
+                            <mainClass>com.xiaobin.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

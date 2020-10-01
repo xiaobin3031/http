@@ -25,7 +25,7 @@ import java.util.stream.IntStream;
  * sql生成类
  */
 public class SqlFactory {
-    private static final String MODEL_PACKAGE = "com.xiaobin.sql.model";
+    private static final String MODEL_PACKAGE = "com.xiaobin.model";
     private static final Logger logger = LoggerFactory.getLogger(SqlFactory.class);
 
     private static final ConcurrentMap<String, DbTable> DB_TABLE_CONCURRENT_MAP = new ConcurrentHashMap<>();
@@ -448,7 +448,7 @@ public class SqlFactory {
                 name = name.substring(1);
             }
             if(name.startsWith(directoryName) && name.endsWith(".class") && !jarEntry.isDirectory()){
-                String className = name.substring(name.lastIndexOf("/"), name.lastIndexOf("."));
+                String className = name.substring(name.lastIndexOf("/") + 1, name.lastIndexOf("."));
                 classSet.add(classLoader.loadClass(MODEL_PACKAGE + "." + className));
             }
         }

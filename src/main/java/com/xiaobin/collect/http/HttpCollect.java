@@ -1,8 +1,8 @@
 package com.xiaobin.collect.http;
 
 import com.xiaobin.collect.MainCollect;
+import com.xiaobin.model.NetworkUri;
 import com.xiaobin.sql.Page;
-import com.xiaobin.sql.model.NetworkUri;
 import com.xiaobin.util.CharsetKit;
 import com.xiaobin.util.CodeKit;
 import com.xiaobin.util.Strkit;
@@ -15,8 +15,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,8 +34,6 @@ import java.util.regex.Pattern;
 public class HttpCollect extends MainCollect {
 
     private static final Logger logger = LoggerFactory.getLogger(HttpCollect.class);
-
-    private static final Executor executor = Executors.newCachedThreadPool();
 
     private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'c', 'h', 'a', 'r', 's', 'e', 't'};
     private static final int LENGTH = CHARSET_BYTE_ARRAY.length;
@@ -71,7 +67,7 @@ public class HttpCollect extends MainCollect {
         }
     }
 
-    private Page<NetworkUri> uriList(int start, int end){
+    private Page<NetworkUri> pageList(int start, int end){
         NetworkUri networkUri = new NetworkUri();
         networkUri.setStatus(CodeKit.INIT);
         return networkUri.page(start, end);
@@ -234,11 +230,11 @@ public class HttpCollect extends MainCollect {
         this.started = true;
         int start = 0, size = 100;
         while(true){
-            Page<NetworkUri> page = uriList(start, start + size);
+            Page<NetworkUri> page = pageList(start, start + size);
             if(page.getTotal() == 0){
                 if(start > 0){
                     if(logger.isInfoEnabled()){
-                        logger.info("返回的数据为空，但start 大于0，重制成0后，重新查询");
+                        logger.info("返回的数据为空，但start 大于0，重置成0后，重新查询");
                     }
                     start = 0;
                     continue;
@@ -277,9 +273,8 @@ public class HttpCollect extends MainCollect {
                             while(httpURLConnection.getInputStream().read(bytes) != -1){
                                 byteArrayOutputStream.write(bytes);
                             }
-                            executor.execute(() ->
-                                    withResponse(byteArrayOutputStream.toByteArray(), networkUri.getId(),
-                                            networkUri.getTopParentId(), url, networkUri.getLevel()));
+                            withResponse(byteArrayOutputStream.toByteArray(), networkUri.getId(),
+                                    networkUri.getTopParentId(), url, networkUri.getLevel());
                         }else{
                             //XWB-2020/9/21- 如果不是text/，就直接完成
                             newNetworkUri.setStatus(CodeKit.COMPLETE);

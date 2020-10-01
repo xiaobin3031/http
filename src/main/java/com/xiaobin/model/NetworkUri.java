@@ -1,4 +1,4 @@
-package com.xiaobin.sql.model;
+package com.xiaobin.model;
 
 import com.xiaobin.sql.Dao;
 import com.xiaobin.sql.annotation.ID;
