@@ -255,9 +255,10 @@ public class HttpCollect extends MainCollect {
                     }
                     continue;
                 }
+                HttpURLConnection httpURLConnection = null;
                 try{
                     URL url = new URL(networkUri.getUri());
-                    HttpURLConnection httpURLConnection = getConnection(url);
+                    httpURLConnection = getConnection(url);
                     httpURLConnection.connect();
 
                     int code = httpURLConnection.getResponseCode();
@@ -283,17 +284,25 @@ public class HttpCollect extends MainCollect {
                         newNetworkUri.setMessage(httpURLConnection.getResponseMessage());
                         networkUri.setStatus(CodeKit.COMPLETE);
                     }
-                    httpURLConnection.disconnect();
                 }catch(Exception ioException){
                     if(logger.isErrorEnabled()){
                         logger.error("uri: {}", networkUri.getUri(), ioException);
                     }
                     newNetworkUri.setStatus(CodeKit.ERROR);
                     newNetworkUri.setMessage(ioException.getMessage());
+                } finally{
+                    if(httpURLConnection != null){
+                        httpURLConnection.disconnect();
+                    }
                 }
                 newNetworkUri.update();
             }
             start += size;
         }
+    }
+
+    public static void main(String[] args) {
+        HttpCollect httpCollect = new HttpCollect();
+        httpCollect.start();
     }
 }
