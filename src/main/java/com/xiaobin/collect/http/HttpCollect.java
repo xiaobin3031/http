@@ -300,9 +300,4 @@ public class HttpCollect extends MainCollect {
             start += size;
         }
     }
-
-    public static void main(String[] args) {
-        HttpCollect httpCollect = new HttpCollect();
-        httpCollect.start();
-    }
 }
