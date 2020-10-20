@@ -256,6 +256,7 @@ public class SqlFactory {
         page.setTotal(total);
         if(total > 0){
             //XWB-2020/9/18- 查询明细记录
+            sql += " limit " + page.getStart() + "," + page.getEnd();
             page.setList(execQuery(resultSet -> getList(dbTable, resultSet), sql, objects));
         }
         return page;
