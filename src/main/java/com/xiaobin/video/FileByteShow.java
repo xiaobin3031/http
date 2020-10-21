@@ -108,8 +108,6 @@ public class FileByteShow {
         this.binaryTextArea.setText(binaryString.toString());
         this.hexTextArea.setText(hexString.toString());
         this.asciiTextArea.setText(asciiString.toString());
-
-        this.pageNum++;
     }
 
     private void initFileChooseFrame(JLabel jLabel){
@@ -220,6 +218,7 @@ public class FileByteShow {
                 return;
             }
             nextBtn.setEnabled(false);
+            this.pageNum++;
             showBinaryInfo();
             nextBtn.setEnabled(true);
         });
