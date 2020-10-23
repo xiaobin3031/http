@@ -91,7 +91,11 @@ public class FileByteShow {
             }
             binaryString.append(formatBinary(Integer.toBinaryString(b)));
             hexString.append(formatHex(Integer.toHexString(b)));
-            asciiString.append((char)b);
+            if(b>= 32 && b <= 126){
+                asciiString.append((char)b);
+            }else{
+                asciiString.append(".");
+            }
             if(i % this.byteInLine == end){
                 if(i < bytes.length - 1){
                     binaryString.append(enter);
