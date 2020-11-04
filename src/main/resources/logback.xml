@@ -15,7 +15,7 @@
               class="ch.qos.logback.core.rolling.RollingFileAppender">
         <Encoding>UTF-8</Encoding>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <FileNamePattern>${LOG_HOME}/http.%d{yyyy-MM-dd}.%i.log</FileNamePattern>
+            <FileNamePattern>${LOG_HOME}/http.%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
             <MaxHistory>30</MaxHistory>
             <maxFileSize>500MB</maxFileSize>
         </rollingPolicy>
