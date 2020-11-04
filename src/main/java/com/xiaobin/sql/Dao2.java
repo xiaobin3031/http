@@ -275,12 +275,10 @@ public class Dao2 {
      * @return 总条数
      */
     private long fetchSize(ResultSet resultSet){
-        long index = 0;
         if(resultSet != null){
             try{
-                while(resultSet.next()){
-                    index++;
-                }
+                resultSet.last();
+                return resultSet.getRow();
             }catch(Exception e){
                 logSqlException(e);
             } finally{
@@ -291,6 +289,6 @@ public class Dao2 {
                 }
             }
         }
-        return index;
+        return 0;
     }
 }
