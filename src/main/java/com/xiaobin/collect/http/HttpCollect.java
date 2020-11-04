@@ -165,7 +165,7 @@ public class HttpCollect extends MainCollect {
             networkUri.setLevel(level + 1);
             try{
                 if (isWithSchema(string)) {
-                    if(string.startsWith("http")){
+                    if(string.toLowerCase().startsWith("http")){
                         URL tmpUrl = new URL(string);
                         withHttpUrl(tmpUrl, networkUri);
                         if(Strkit.isEmpty(tmpUrl.getFile())){
