@@ -89,6 +89,8 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
                                     if(logger.isErrorEnabled()){
                                         logger.error("刷新连接失败: {}", e.getMessage(), e);
                                     }
+                                    //XWB-2020/11/4- 刷新失败后，删除该连接
+                                    close(t);
                                 }
                             }
                         }
