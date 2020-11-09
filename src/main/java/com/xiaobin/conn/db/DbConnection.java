@@ -1,6 +1,7 @@
 package com.xiaobin.conn.db;
 
 import com.xiaobin.conn.AbstractConnectionFactory;
+import com.xiaobin.util.Strkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,15 +17,31 @@ public class DbConnection extends AbstractConnectionFactory<DbObj> {
     private static final DbConnection instance = new DbConnection();
 
     /* 数据库连接参数 */
-    private static final String driverClass = "com.mysql.cj.jdbc.Driver";
-    private static final String url = "jdbc:mysql://127.0.0.1:3306/http?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true";
-    private static final String username = "http";
-    private static final String password = "http.1234";
+    private static String driverClass = "com.mysql.cj.jdbc.Driver";
+    private static String url = "jdbc:mysql://127.0.0.1:3306/http?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true";
+    private static String username = "http";
+    private static String password = "http.1234";
     private static final String ACTIVE_SQL = "select 1";
 
     private DbConnection(){}
 
     static{
+        String driverClass = System.getenv("db.driverClass");
+        if(!Strkit.isEmpty(driverClass)){
+            DbConnection.driverClass = driverClass;
+        }
+        String url = System.getenv("db.url");
+        if(!Strkit.isEmpty(url)){
+            DbConnection.url = String.format("jdbc:mysql://%s/http?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true", url);
+        }
+        String user = System.getenv("db.user");
+        if(!Strkit.isEmpty(user)){
+            DbConnection.username = user;
+        }
+        String password = System.getenv("db.password");
+        if (!Strkit.isEmpty(password)) {
+            DbConnection.password = password;
+        }
         instance._init();
     }
 

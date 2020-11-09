@@ -1,10 +1,12 @@
 package com.xiaobin.collect.http;
 
 import com.xiaobin.collect.MainCollect;
+import com.xiaobin.model.Constant;
 import com.xiaobin.model.NetworkUri;
 import com.xiaobin.sql.Page;
 import com.xiaobin.util.CharsetKit;
 import com.xiaobin.util.CodeKit;
+import com.xiaobin.util.ConstKit;
 import com.xiaobin.util.Strkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,9 +16,10 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * http搜集
@@ -38,6 +41,8 @@ public class HttpCollect extends MainCollect {
     private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'c', 'h', 'a', 'r', 's', 'e', 't'};
     private static final int LENGTH = CHARSET_BYTE_ARRAY.length;
 
+    private static final Map<String, String> protocolTransfer = new HashMap<>();
+
     private volatile boolean started = false;
 
     private final static HttpCollect instance = new HttpCollect();
@@ -46,6 +51,12 @@ public class HttpCollect extends MainCollect {
 
     public static HttpCollect getInstance() {
         return instance;
+    }
+
+    private final List<String> ignoredProtocol = new ArrayList<>();
+
+    static{
+        protocolTransfer.put("hthttp", "http");
     }
 
     /**
@@ -123,7 +134,25 @@ public class HttpCollect extends MainCollect {
      * @return true：带协议，false：不带协议
      */
     private boolean isWithSchema(String uri){
-        return uri.contains(":");
+        return uri.matches("^[^:]+:.+$");
+    }
+
+    /**
+     * 校验协议是否无效
+     * @param url url
+     * @return 校验结果，true：无效，false：有效
+     */
+    private boolean invalidScheme(URL url){
+        return !this.ignoredProtocol.isEmpty() && this.ignoredProtocol.contains(url.getProtocol());
+    }
+
+    /**
+     * 校验协议是否无效
+     * @param uri uri
+     * @return 校验结果，true：无效，false：有效
+     */
+    private boolean invalidScheme(URI uri){
+        return !this.ignoredProtocol.isEmpty() && this.ignoredProtocol.contains(uri.getScheme());
     }
     /**
      * 解析返回的信息
@@ -159,14 +188,22 @@ public class HttpCollect extends MainCollect {
         pattern = Pattern.compile("<a[^>]+href=['\"]?([^'\"\\s><]+)[^><]*>");
         matcher = pattern.matcher(msg);
         NetworkUri tmp = new NetworkUri();
+        List<String> uriList = new ArrayList<>();
         while(matcher.find()){
             String string = matcher.group(1);
+            if(uriList.contains(string)){
+                continue;
+            }
+            uriList.add(string);
             networkUri = new NetworkUri();
             networkUri.setLevel(level + 1);
             try{
                 if (isWithSchema(string)) {
                     if(string.toLowerCase().startsWith("http")){
                         URL tmpUrl = new URL(string);
+                        if(this.invalidScheme(tmpUrl)){
+                            continue;
+                        }
                         withHttpUrl(tmpUrl, networkUri);
                         if(Strkit.isEmpty(tmpUrl.getFile())){
                             //XWB-2020/9/29- 将没有子目录的url的级别设置成0
@@ -174,6 +211,10 @@ public class HttpCollect extends MainCollect {
                         }
                     }else{
                         URI uri = new URI(string);
+                        if(this.invalidScheme(uri)){
+                            continue;
+                        }
+                        //todo 替换协议
                         networkUri.setUri(uri.toString());
                         networkUri.setProtocol(uri.getScheme());
                         networkUri.setStatus(CodeKit.COMPLETE);//如果不是http，就直接完成
@@ -226,6 +267,14 @@ public class HttpCollect extends MainCollect {
         }
         if(logger.isDebugEnabled()){
             logger.debug("启动手机类: {}", HttpCollect.class.getName());
+        }
+        //@Date:2020/11/9 - @Author:XWB - @Msg: 获取不正常的协议名称，以便过滤
+        Constant constant = new Constant();
+        constant.setType(ConstKit.HTTP_COLLECT_PROTOCOL_IGNORE);
+        List<Constant> constantList = constant.find();
+        if(!constantList.isEmpty()){
+            this.ignoredProtocol.addAll(constantList.stream().map(Constant::getValue).filter(s -> !Strkit.isEmpty(s))
+                .flatMap(s -> Arrays.stream(s.split(","))).collect(Collectors.toList()));
         }
         this.started = true;
         int start = 0, size = 100;
