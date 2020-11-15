@@ -30,6 +30,8 @@ public class SqlFactory {
 
     private static final ConcurrentMap<String, DbTable> DB_TABLE_CONCURRENT_MAP = new ConcurrentHashMap<>();
 
+    private static final Dao2 toQuery = new Dao2();
+    private static final Dao2 toExec = new Dao2();
     static{
         init();
     }
@@ -394,13 +396,11 @@ public class SqlFactory {
     }
 
     private static <T> T execQuery(Function<ResultSet, T> function, String sql, Object[] objects){
-        Dao2 dao2 = new Dao2();
-        return dao2.find(function, sql, objects);
+        return toQuery.find(function, sql, objects);
     }
 
     private static int exec(String sql, Object[] objects){
-        Dao2 dao2 = new Dao2();
-        return dao2.exec(sql, objects);
+        return toExec.exec(sql, objects);
     }
     /**
      * 添加where的id条件

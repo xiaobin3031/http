@@ -17,6 +17,8 @@ import java.io.UnsupportedEncodingException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -41,11 +43,11 @@ public class HttpCollect extends MainCollect {
     private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'c', 'h', 'a', 'r', 's', 'e', 't'};
     private static final int LENGTH = CHARSET_BYTE_ARRAY.length;
 
-    private static final Map<String, String> protocolTransfer = new HashMap<>();
-
     private volatile boolean started = false;
 
     private final static HttpCollect instance = new HttpCollect();
+
+    private final static ExecutorService executorService = Executors.newFixedThreadPool(50);
 
     private HttpCollect(){}
 
@@ -53,11 +55,9 @@ public class HttpCollect extends MainCollect {
         return instance;
     }
 
-    private final List<String> ignoredProtocol = new ArrayList<>();
 
-    static{
-        protocolTransfer.put("hthttp", "http");
-    }
+    private final List<String> ignoredProtocol = new ArrayList<>();
+    private final Map<String, String> protocolTransfer = new HashMap<>();
 
     /**
      * 获取http连接
@@ -137,13 +137,21 @@ public class HttpCollect extends MainCollect {
         return uri.matches("^[^:]+:.+$");
     }
 
+    private String transScheme(URI uri){
+        String scheme = uri.getScheme();
+        if(scheme.matches("^[htps]+:")){
+            return "http";
+        }
+        return this.protocolTransfer.getOrDefault(uri.getScheme(), uri.getScheme());
+    }
+
     /**
      * 校验协议是否无效
      * @param url url
      * @return 校验结果，true：无效，false：有效
      */
     private boolean invalidScheme(URL url){
-        return !this.ignoredProtocol.isEmpty() && this.ignoredProtocol.contains(url.getProtocol());
+        return !this.ignoredProtocol.isEmpty() && this.ignoredProtocol.contains(url.getProtocol().toLowerCase());
     }
 
     /**
@@ -215,11 +223,14 @@ public class HttpCollect extends MainCollect {
                             continue;
                         }
                         //todo 替换协议
-                        networkUri.setUri(uri.toString());
+                        String scheme = this.transScheme(uri);
+                        networkUri.setUri(uri.toString().replaceFirst("^" + uri.getScheme(), scheme));
                         networkUri.setProtocol(uri.getScheme());
-                        networkUri.setStatus(CodeKit.COMPLETE);//如果不是http，就直接完成
-                        //XWB-2020/9/22- 完成时，将当前页的标题赋值给它
-                        networkUri.setTitle(title);
+                        if(!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")){
+                            networkUri.setStatus(CodeKit.COMPLETE);//如果不是http，就直接完成
+                            //XWB-2020/9/22- 完成时，将当前页的标题赋值给它
+                            networkUri.setTitle(title);
+                        }
                     }
                 }else{
                     URL tmpUrl = new URL(url, string);
@@ -275,6 +286,13 @@ public class HttpCollect extends MainCollect {
         if(!constantList.isEmpty()){
             this.ignoredProtocol.addAll(constantList.stream().map(Constant::getValue).filter(s -> !Strkit.isEmpty(s))
                 .flatMap(s -> Arrays.stream(s.split(","))).collect(Collectors.toList()));
+        }
+        constant.setType(ConstKit.HTTP_COLLECT_PROTOCOL_TRANSFER);
+        constantList = constant.find();
+        if(!constantList.isEmpty()){
+            this.protocolTransfer.putAll(constantList.stream().map(Constant::getValue).filter(s -> !Strkit.isEmpty(s))
+                .flatMap(s -> Arrays.stream(s.split(","))).map(s -> s.split(":"))
+                .filter(ss -> ss.length == 2).collect(Collectors.toMap(ss -> ss[0], ss->ss[1], (k1,k2)->k2)));
         }
         this.started = true;
         int start = 0, size = 100;
