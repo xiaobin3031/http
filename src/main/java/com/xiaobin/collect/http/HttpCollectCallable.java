@@ -270,6 +270,9 @@ public class HttpCollectCallable implements Callable<List<NetworkUri>> {
                     URL tmpUrl = new URL(url, string);
                     withHttpUrl(tmpUrl, networkUri);
                 }
+                if(Strkit.isEmpty(networkUri.getProtocol())){
+                    continue;
+                }
             } catch (MalformedURLException | URISyntaxException e) {
                 if(logger.isErrorEnabled()){
                     logger.error(e.getMessage(), e);
