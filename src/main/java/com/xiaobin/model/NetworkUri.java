@@ -1,11 +1,10 @@
 package com.xiaobin.model;
 
-import com.xiaobin.sql.Dao;
 import com.xiaobin.sql.annotation.ID;
 import com.xiaobin.sql.annotation.Table;
 
 @Table
-public class NetworkUri implements Dao {
+public class NetworkUri{
 
     @ID
     private Integer id;

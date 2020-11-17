@@ -1,12 +1,13 @@
 package com.xiaobin.model;
 
-import com.xiaobin.sql.Dao;
 import com.xiaobin.sql.annotation.ID;
+import com.xiaobin.sql.annotation.Table;
 
 /**
  * Created by XWB on 2020-11-09.
  */
-public class Constant implements Dao {
+@Table
+public class Constant{
 
     @ID
     private Integer id;
