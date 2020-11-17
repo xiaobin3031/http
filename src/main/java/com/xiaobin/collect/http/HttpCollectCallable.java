@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 /**
  * http收集类的执行动作
  */
-public class HttpCollectCallable implements Callable<List<NetworkUri>> {
+public class HttpCollectCallable implements Callable<Object> {
     private static final Logger logger = LoggerFactory.getLogger(HttpCollectCallable.class);
 
     private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'c', 'h', 'a', 'r', 's', 'e', 't'};
@@ -56,7 +56,7 @@ public class HttpCollectCallable implements Callable<List<NetworkUri>> {
     }
 
     @Override
-    public List<NetworkUri> call(){
+    public Object call(){
         HttpURLConnection httpURLConnection = null;
         NetworkUri newNetworkUri = new NetworkUri();
         newNetworkUri.setId(this.networkUri.getId());
@@ -78,7 +78,7 @@ public class HttpCollectCallable implements Callable<List<NetworkUri>> {
                     while(httpURLConnection.getInputStream().read(bytes) != -1){
                         byteArrayOutputStream.write(bytes);
                     }
-                    return withResponse(byteArrayOutputStream.toByteArray(), url, this.networkUri, newNetworkUri);
+                    withResponse(byteArrayOutputStream.toByteArray(), url, this.networkUri, newNetworkUri);
                 }
             }else{
                 newNetworkUri.setMessage(httpURLConnection.getResponseMessage());
@@ -203,7 +203,7 @@ public class HttpCollectCallable implements Callable<List<NetworkUri>> {
      * @param url url
      * @param origin 原始的networkUri
      */
-    private List<NetworkUri> withResponse(byte[] bytes, URL url, NetworkUri origin, NetworkUri newNetworkUri){
+    private void withResponse(byte[] bytes, URL url, NetworkUri origin, NetworkUri newNetworkUri){
         String charset = getCharset(bytes);
         String msg;
         try {
@@ -212,9 +212,8 @@ public class HttpCollectCallable implements Callable<List<NetworkUri>> {
             if(logger.isErrorEnabled()){
                 logger.error(e.getMessage(), e);
             }
-            return null;
+            return;
         }
-        List<NetworkUri> networkUriList = new ArrayList<>();
         Pattern pattern = Pattern.compile("<title>(.+?)</title>");
         Matcher matcher = pattern.matcher(msg);
         String title = null;
@@ -290,10 +289,9 @@ public class HttpCollectCallable implements Callable<List<NetworkUri>> {
                     networkUri.setTopParentId(origin.getTopParentId());
                 }
 
-                networkUriList.add(networkUri);
+                SqlFactory.insert(networkUri);
             }
         }
-        return networkUriList;
     }
 
     private void withHttpUrl(URL url, NetworkUri networkUri){

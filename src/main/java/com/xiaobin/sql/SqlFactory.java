@@ -129,51 +129,6 @@ public class SqlFactory {
     }
 
     /**
-     * 批量插入数据
-     * @param t 数据原型
-     * @param list 数据集
-     * @param <T> 范型
-     * @return 插入结果
-     */
-    public static <T> int[] insertList(T t, List<T> list){
-        if(list == null || list.isEmpty()){
-            return new int[0];
-        }
-        DbTable dbTable = getDbTable(t);
-        Map<String, ColumnMethod> methodMap = dbTable.getColumnMethodMap();
-        List<Object[]> valueList = new ArrayList<>();
-        StringBuilder stringBuilder = new StringBuilder("insert into ")
-                .append(dbTable.getTableName())
-                .append("(");
-        StringBuilder valueBuilder = new StringBuilder(" values(");
-        List<String> column = new LinkedList<>();
-        for(Map.Entry<String,ColumnMethod> entry: methodMap.entrySet()){
-            stringBuilder.append(entry.getValue().getName()).append(",");
-            valueBuilder.append("?,");
-            column.add(entry.getKey());
-        }
-        int size = methodMap.size();
-        for(T tt: list){
-            Object[] objects = new Object[size];
-            for(int i=0;i< column.size();i++){
-                try {
-                    Object value = methodMap.get(column.get(i)).getGetMethod().invoke(tt);
-                    objects[i] = value;
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    if(logger.isErrorEnabled()){
-                        logger.error(e.getMessage(), e);
-                    }
-                    throw new RuntimeException(e);
-                }
-            }
-            valueList.add(objects);
-        }
-        stringBuilder.replace(stringBuilder.length() - 1, stringBuilder.length(), ")")
-                .append(valueBuilder.replace(valueBuilder.length() - 1, valueBuilder.length(), ")"));
-        return toExec.execList(stringBuilder.toString(), valueList);
-    }
-
-    /**
      * update sql
      * @param t 原数据
      * @param <T> 泛型

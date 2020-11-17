@@ -9,7 +9,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
@@ -21,7 +20,6 @@ public class Dao {
     private static final AtomicLong atomicLong = new AtomicLong(0);
     private static final Logger logger = LoggerFactory.getLogger(Dao.class);
 
-    private static final int BATCH_MAX_COUNT = 1000;
     /**
      * 打印参数
      * @param objects 参数列表
@@ -161,66 +159,6 @@ public class Dao {
         }
         printResult(id, result);
         return result;
-    }
-
-    /**
-     * 执行批量sql 执行结果条数可能不准确，尽量不要使用
-     * @param sql sql
-     * @param list 参数
-     * @return 成功结果数
-     */
-    public int[] execList(String sql, List<Object[]> list){
-        DbObj dbObj = null;
-        PreparedStatement preparedStatement = null;
-        long id = atomicLong.incrementAndGet();
-        printSql(id, sql);
-        int[] result = new int[0];
-        try{
-            dbObj = DbConnection.getInstance().getConn();
-            boolean commit = dbObj.getConnection().getAutoCommit();
-            dbObj.getConnection().setAutoCommit(false);
-            preparedStatement = dbObj.getConnection().prepareStatement(sql);
-            int count = 0;
-            if(list != null && !list.isEmpty()){
-                for(Object[] objects: list){
-                    printArguments(id, objects);
-                    setArguments(preparedStatement, objects);
-                    preparedStatement.addBatch();
-                    count++;
-                    if(count % BATCH_MAX_COUNT == 0){
-                        int[] results = preparedStatement.executeBatch();
-                        result = copyListResult(result, results);
-                        count = 0;
-                    }
-                }
-                if(count > 0){
-                    int[] results = preparedStatement.executeBatch();
-                    result = copyListResult(result, results);
-                }
-            }
-            dbObj.getConnection().commit();
-            dbObj.getConnection().setAutoCommit(commit);
-        }catch(Exception e){
-            if(logger.isErrorEnabled()){
-                logger.error("ID: {}, 执行insert失败: ", id);
-            }
-            logSqlException(e);
-            if(dbObj != null){
-                rollback(dbObj.getConnection());
-            }
-        }finally{
-            DbConnection.getInstance().inPool(dbObj);
-            DbConnection.getInstance().close(preparedStatement);
-        }
-        printResult(id, result.length + "/" + (list == null ? 0 : list.size()));
-        return result;
-    }
-
-    private int[] copyListResult(int[] origin, int[] result){
-        int[] newArray = new int[origin.length + result.length];
-        System.arraycopy(origin, 0, newArray, 0, origin.length);
-        System.arraycopy(result, 0, newArray, origin.length, result.length);
-        return newArray;
     }
 
     public <T> T find(Function<ResultSet, T> function, String sql, Object... objects){

@@ -49,7 +49,6 @@ public class HttpCollect extends MainCollect {
         return SqlFactory.page(networkUri, 0, MAX_SIZE);
     }
 
-
     @Override
     public void start(){
         if(this.started){
@@ -59,23 +58,10 @@ public class HttpCollect extends MainCollect {
             logger.debug("启动收集类: {}", HttpCollect.class.getName());
         }
         this.started = true;
-        List<Future<List<NetworkUri>>> futureList = new ArrayList<>();
-        List<NetworkUri> networkUriAddList = new ArrayList<>();
-        Future<Object> sqlFuture = null;//只是为了有个堵塞的效果
+        List<Future<Object>> futureList = new ArrayList<>();
         while(true){
             Page<NetworkUri> page = pageList();
             if(page.getTotal() == 0){
-                if(sqlFuture != null){
-                    try {
-                        sqlFuture.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        if(logger.isErrorEnabled()){
-                            logger.error(e.getMessage(), e);
-                        }
-                    }
-                    sqlFuture = null;
-                    continue;
-                }
                 if(logger.isInfoEnabled()){
                     logger.info("表network_uri中再无status=init数据，退出");
                 }
@@ -95,23 +81,19 @@ public class HttpCollect extends MainCollect {
                 }
                 futureList.add(executorService.submit(new HttpCollectCallable(networkUri)));
             }
-            networkUriAddList.clear();
             if(!futureList.isEmpty()){
-                futureList.stream().map(f -> {
+                futureList.forEach(f -> {
                     try {
-                        return f.get();
+                        long start = System.currentTimeMillis();
+                        f.get();
+                        long end = System.currentTimeMillis();
+                        long sep = start - end;
+                        System.out.println(sep);
                     } catch (InterruptedException | ExecutionException e) {
                         if(logger.isErrorEnabled()){
                             logger.error(e.getMessage(), e);
                         }
-                        return null;
                     }
-                }).filter(l -> l != null && !l.isEmpty()).forEach(networkUriAddList::addAll);
-            }
-            if(!networkUriAddList.isEmpty()){
-                sqlFuture = executorService.submit(() -> {
-                    SqlFactory.insertList(networkUriAddList.get(0), networkUriAddList);
-                    return null;
                 });
             }
         }

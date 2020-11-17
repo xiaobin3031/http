@@ -59,6 +59,9 @@ public class DbConnection extends AbstractConnectionFactory<DbObj> {
             }
             throw new RuntimeException(e);
         }
+
+        setMinKeep(50);
+        setMaxKeep(100);
     }
 
     @Override
