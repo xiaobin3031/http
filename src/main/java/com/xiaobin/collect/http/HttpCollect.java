@@ -84,11 +84,7 @@ public class HttpCollect extends MainCollect {
             if(!futureList.isEmpty()){
                 futureList.forEach(f -> {
                     try {
-                        long start = System.currentTimeMillis();
                         f.get();
-                        long end = System.currentTimeMillis();
-                        long sep = start - end;
-                        System.out.println(sep);
                     } catch (InterruptedException | ExecutionException e) {
                         if(logger.isErrorEnabled()){
                             logger.error(e.getMessage(), e);
