@@ -30,7 +30,7 @@ public class HttpCollect extends MainCollect {
     private static final Logger logger = LoggerFactory.getLogger(HttpCollect.class);
 
     private volatile boolean started = false;
-    private final static int MAX_SIZE = 1;
+    private final static int MAX_SIZE = 100;
 
     private final static HttpCollect instance = new HttpCollect();
 
