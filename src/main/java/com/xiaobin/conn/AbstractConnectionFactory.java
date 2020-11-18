@@ -138,7 +138,7 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
     private void initConn(int count, boolean useThread){
         if(count <= 0){
             if(logger.isWarnEnabled()){
-                logger.warn("需要增加的连接数异常: {}", count);
+                logger.warn("需要增加的连接数不正确: {}", count);
             }
             return;
         }
@@ -148,29 +148,23 @@ public abstract class AbstractConnectionFactory<T extends ConnectionObj> {
             }
             return;
         }
-        this.replenish = true;
-        this.atomicInteger.set(-1 * count);
         if(this.connectionConcurrentLinkedQueue.size() > this.connectionConfig.getMaxKeep()){
             if(logger.isInfoEnabled()){
                 logger.info("连接数超出最大值: {}, 现有: {}，不增加连接", this.connectionConfig.getMaxKeep(), this.connectionConcurrentLinkedQueue.size());
             }
         }else{
+            this.replenish = true;
+            this.atomicInteger.set(-1 * count);
             if(logger.isDebugEnabled()){
                 logger.debug("开始增加连接数： {}", count);
             }
-            try{
-                if(useThread){
-                    for(int i=0;i<count;i++){
-                        this.executorService.execute(this::replenishConn);
-                    }
-                }else{
-                    for(int i=0;i<count;i++){
-                        replenishConn();
-                    }
+            if(useThread){
+                for(int i=0;i<count;i++){
+                    this.executorService.execute(this::replenishConn);
                 }
-            }catch(Exception e){
-                if(logger.isErrorEnabled()){
-                    logger.error("增加连接数失败: {}", e.getMessage(), e);
+            }else{
+                for(int i=0;i<count;i++){
+                    replenishConn();
                 }
             }
         }
