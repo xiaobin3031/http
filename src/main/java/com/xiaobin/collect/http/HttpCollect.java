@@ -59,8 +59,18 @@ public class HttpCollect extends MainCollect {
         }
         this.started = true;
         List<Future<Object>> futureList = new ArrayList<>();
+        Future<Page<NetworkUri>> future = null;//使待遍历数据更快速的就绪
+        Page<NetworkUri> page = pageList();
         while(true){
-            Page<NetworkUri> page = pageList();
+            if(future != null){
+                try {
+                    page = future.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    if(logger.isErrorEnabled()){
+                        logger.error(e.getMessage(), e);
+                    }
+                }
+            }
             if(page.getTotal() == 0){
                 if(logger.isInfoEnabled()){
                     logger.info("表network_uri中再无status=init数据，退出");
@@ -81,6 +91,7 @@ public class HttpCollect extends MainCollect {
                 }
                 futureList.add(executorService.submit(new HttpCollectCallable(networkUri)));
             }
+            future = executorService.submit(this::pageList);
             if(!futureList.isEmpty()){
                 futureList.forEach(f -> {
                     try {
