@@ -11,8 +11,13 @@
     </appender>
 
     <!-- 按照每天生成日志文件 -->
-    <appender name="FILE"
-              class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>DEBUG</level>
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
         <Encoding>UTF-8</Encoding>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <FileNamePattern>${LOG_HOME}/http.%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
@@ -24,11 +29,29 @@
         </layout>
     </appender>
 
+    <appender name="traceFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>TRACE</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <Encoding>UTF-8</Encoding>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <FileNamePattern>${LOG_HOME}/trace/http.%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
+            <MaxHistory>5</MaxHistory>
+            <maxFileSize>1000MB</maxFileSize>
+        </rollingPolicy>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} -%msg%n</pattern>
+        </layout>
+    </appender>
+
     <logger name="com.xiaobin.sql" value="DEBUG"/>
     <logger name="com.xiaobin.collect" value="DEBUG"/>
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />
         <appender-ref ref="FILE" />
+        <appender-ref ref="traceFile"/>
     </root>
 </configuration>

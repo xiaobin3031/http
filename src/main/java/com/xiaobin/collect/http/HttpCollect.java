@@ -35,8 +35,15 @@ public class HttpCollect extends MainCollect {
     private final static HttpCollect instance = new HttpCollect();
 
     //多出来的一个线程用来执行sql
-    private final static ExecutorService executorService = Executors.newFixedThreadPool(MAX_SIZE + 1);
+    private final static ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(MAX_SIZE + 1);
 
+    static {
+        executorService.setRejectedExecutionHandler((r, executor) -> {
+            if(logger.isTraceEnabled()){
+                logger.trace("some thread is rejected, {}", r);
+            }
+        });
+    }
     private HttpCollect(){}
 
     public static HttpCollect getInstance() {
@@ -55,7 +62,7 @@ public class HttpCollect extends MainCollect {
             return;
         }
         if(logger.isDebugEnabled()){
-            logger.debug("启动收集类: {}", HttpCollect.class.getName());
+            logger.debug("start collect class: {}", HttpCollect.class.getName());
         }
         this.started = true;
         List<Future<Object>> futureList = new ArrayList<>();
@@ -63,17 +70,11 @@ public class HttpCollect extends MainCollect {
         Page<NetworkUri> page = pageList();
         while(true){
             if(future != null){
-                try {
-                    page = future.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    if(logger.isErrorEnabled()){
-                        logger.error(e.getMessage(), e);
-                    }
-                }
+                page = futureGet(future);
             }
-            if(page.getTotal() == 0){
+            if(page == null || page.getTotal() == 0){
                 if(logger.isInfoEnabled()){
-                    logger.info("表network_uri中再无status=init数据，退出");
+                    logger.info("there is no data of status is init in table network_uri");
                 }
                 break;
             }
@@ -83,27 +84,36 @@ public class HttpCollect extends MainCollect {
                 NetworkUri newNetworkUri = new NetworkUri();
                 newNetworkUri.setId(networkUri.getId());
                 newNetworkUri.setStatus(CodeKit.FETCHING);
+                if(logger.isTraceEnabled()){
+                    logger.trace("{} begin to process id", networkUri.getId());
+                }
                 if(SqlFactory.update(newNetworkUri) != 1){
                     if(logger.isDebugEnabled()){
-                        logger.debug("{} 已经在处理", networkUri.getUri());
+                        logger.debug("{} is processing, skip", networkUri.getUri());
                     }
                     continue;
                 }
                 futureList.add(executorService.submit(new HttpCollectCallable(networkUri)));
+                if(logger.isTraceEnabled()){
+                    logger.trace("{} add id in executorService", networkUri.getId());
+                }
             }
             future = executorService.submit(this::pageList);
             if(!futureList.isEmpty()){
-                futureList.forEach(f -> {
-                    try {
-                        f.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        if(logger.isErrorEnabled()){
-                            logger.error(e.getMessage(), e);
-                        }
-                    }
-                });
+                futureList.forEach(this::futureGet);
             }
         }
+    }
+
+    private <T> T futureGet(Future<T> future){
+        try {
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            if(logger.isErrorEnabled()){
+                logger.error(e.getMessage(), e);
+            }
+        }
+        return null;
     }
 
     public static void main(String[] args) {

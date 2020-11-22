@@ -94,6 +94,9 @@ public class HttpCollectCallable implements Callable<Object> {
             if(httpURLConnection != null){
                 httpURLConnection.disconnect();
             }
+            if(logger.isTraceEnabled()){
+                logger.trace("{} completed", newNetworkUri.getId());
+            }
             SqlFactory.update(newNetworkUri);
         }
         return null;
@@ -209,10 +212,7 @@ public class HttpCollectCallable implements Callable<Object> {
         try {
             msg = new String(bytes, charset);
         } catch (UnsupportedEncodingException e) {
-            if(logger.isErrorEnabled()){
-                logger.error(e.getMessage(), e);
-            }
-            return;
+            throw new RuntimeException(e);
         }
         Pattern pattern = Pattern.compile("<title>(.+?)</title>");
         Matcher matcher = pattern.matcher(msg);
