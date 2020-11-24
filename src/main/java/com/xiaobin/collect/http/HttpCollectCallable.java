@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -27,7 +28,8 @@ import java.util.stream.Collectors;
 public class HttpCollectCallable implements Callable<Object> {
     private static final Logger logger = LoggerFactory.getLogger(HttpCollectCallable.class);
 
-    private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'c', 'h', 'a', 'r', 's', 'e', 't'};
+    //少第一个字符是因为操作byteBuffer时可以少几个步骤
+    private static final byte[] CHARSET_BYTE_ARRAY = new byte[]{'h', 'a', 'r', 's', 'e', 't'};
     private static final int LENGTH = CHARSET_BYTE_ARRAY.length;
     private static final List<String> ignoredProtocol = new ArrayList<>();
     private static final Map<String, String> protocolTransfer = new HashMap<>();
@@ -103,8 +105,12 @@ public class HttpCollectCallable implements Callable<Object> {
     }
 
 
-    private boolean isCharset(byte b, char c){
-        return b == '-' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    private boolean isCharset(byte b){
+        return b == '-' || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9');
+    }
+
+    private boolean isEnd(byte b){
+        return b == '\'' || b == '"' || b == ' ' || b == '/' || b == '>';
     }
 
     /**
@@ -113,38 +119,51 @@ public class HttpCollectCallable implements Callable<Object> {
      * @return 编码，默认使用UTF-8
      */
     private String getCharset(byte[] bytes){
-        int i = 0, index = 0;
-        for(; i<= bytes.length - LENGTH && index < LENGTH; i++){
-            if(bytes[i] == CHARSET_BYTE_ARRAY[index]){
-                index++;
-            }else{
-                index = 0;
-            }
-        }
-        if(i == bytes.length - LENGTH){
-            return StandardCharsets.UTF_8.toString();
-        }else{
-            int length = i + 50, firstIndex = 0, endIndex = 0;
-            byte b;
-            char c;
-            for(; i < length; i++){
-                b = bytes[i];
-                c = (char) b;
-                if(isCharset(b, c)){
-                    if(firstIndex == 0){
-                        firstIndex = i;
+        ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+        byte[] tmp = new byte[LENGTH], subTmp;
+        byte bb;
+        boolean flag = false;
+        int start = 0, end;
+        charset: while(byteBuffer.hasRemaining()){
+            bb = byteBuffer.get();
+            if(bb == 'c'){
+                byteBuffer.mark();
+                byteBuffer.get(tmp);
+                System.out.println(Arrays.toString(tmp));
+                if(Arrays.equals(CHARSET_BYTE_ARRAY, tmp)){
+                    end = byteBuffer.position() + 20;
+                    while(byteBuffer.position() < end && byteBuffer.hasRemaining()){
+                        if(!flag){
+                            byteBuffer.mark();
+                            start = byteBuffer.position();
+                        }
+                        bb = byteBuffer.get();
+                        if(isCharset(bb)){
+                            flag = true;
+                        }else{
+                            //XWB-2020/11/24- 不是编码字符，不是end字符，跳过
+                            if(isEnd(bb)){
+                                end = byteBuffer.position() - 1;
+                                break;
+                            }else{
+                                if(flag){
+                                    continue charset;
+                                }
+                            }
+                        }
+                    }
+                    if(flag){
+                        byteBuffer.reset();
+                        subTmp = new byte[end - start];
+                        byteBuffer.get(subTmp);
+                        return CharsetKit.getCharset(new String(subTmp, StandardCharsets.UTF_8));
                     }
                 }else{
-                    if(firstIndex > 0){
-                        endIndex = i;
-                        break;
-                    }
+                    byteBuffer.reset();
                 }
             }
-            byte[] tmp = new byte[endIndex - firstIndex];
-            System.arraycopy(bytes, firstIndex, tmp, 0, tmp.length);
-            return CharsetKit.getCharset(new String(tmp, StandardCharsets.UTF_8));
         }
+        return StandardCharsets.UTF_8.toString();
     }
 
     /**
