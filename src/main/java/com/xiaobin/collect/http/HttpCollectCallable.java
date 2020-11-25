@@ -120,43 +120,37 @@ public class HttpCollectCallable implements Callable<Object> {
      */
     private String getCharset(byte[] bytes){
         ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
-        byte[] tmp = new byte[LENGTH], subTmp;
+        byte[] tmp = new byte[LENGTH];
         byte bb;
         boolean flag = false;
-        int start = 0, end;
+        int end;
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         charset: while(byteBuffer.hasRemaining()){
             bb = byteBuffer.get();
             if(bb == 'c'){
                 byteBuffer.mark();
                 byteBuffer.get(tmp);
-                System.out.println(Arrays.toString(tmp));
                 if(Arrays.equals(CHARSET_BYTE_ARRAY, tmp)){
                     end = byteBuffer.position() + 20;
                     while(byteBuffer.position() < end && byteBuffer.hasRemaining()){
-                        if(!flag){
-                            byteBuffer.mark();
-                            start = byteBuffer.position();
-                        }
                         bb = byteBuffer.get();
                         if(isCharset(bb)){
+                            byteArrayOutputStream.write(bb);
                             flag = true;
                         }else{
                             //XWB-2020/11/24- 不是编码字符，不是end字符，跳过
                             if(isEnd(bb)){
-                                end = byteBuffer.position() - 1;
                                 break;
                             }else{
                                 if(flag){
+                                    byteArrayOutputStream.reset();
                                     continue charset;
                                 }
                             }
                         }
                     }
                     if(flag){
-                        byteBuffer.reset();
-                        subTmp = new byte[end - start];
-                        byteBuffer.get(subTmp);
-                        return CharsetKit.getCharset(new String(subTmp, StandardCharsets.UTF_8));
+                        return CharsetKit.getCharset(new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
                     }
                 }else{
                     byteBuffer.reset();
