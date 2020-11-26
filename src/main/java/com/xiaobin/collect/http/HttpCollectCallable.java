@@ -144,6 +144,7 @@ public class HttpCollectCallable implements Callable<Object> {
                             }else{
                                 if(flag){
                                     byteArrayOutputStream.reset();
+                                    flag = false;
                                     continue charset;
                                 }
                             }
